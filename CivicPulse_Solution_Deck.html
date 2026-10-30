@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CivicPulse AI — Solution Submission Pitch (PS 9)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(22, 30, 49, 0.85);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --primary: #38bdf8;
+      --emerald: #34d399;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --indigo: #818cf8;
+      --text-main: #ffffff;
+      --text-muted: #cbd5e1;
+      --text-dim: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: -15%;
+      left: 15%;
+      width: 55vw;
+      height: 55vw;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(129, 140, 248, 0.05) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .ambient-glow-2 {
+      position: fixed;
+      bottom: -25%;
+      right: 10%;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, rgba(52, 211, 153, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Header */
+    header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 36px;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(14px);
+      background: rgba(11, 15, 25, 0.85);
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+    }
+    .logo-title {
+      font-size: 19px;
+      font-weight: 800;
+      margin-left: 10px;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+    .btn.primary {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border: none;
+      font-weight: 700;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+    }
+
+    /* Deck Viewport */
+    .deck-viewport {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 36px;
+      z-index: 5;
+    }
+
+    .slide {
+      position: absolute;
+      width: calc(100% - 72px);
+      max-width: 1360px;
+      height: calc(100% - 40px);
+      max-height: 760px;
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 20px;
+      padding: 34px 44px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.97) translateY(10px);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(20px);
+      overflow-y: auto;
+    }
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Slide Typography */
+    .slide-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+      width: fit-content;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .slide-title {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -0.8px;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .slide-subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+
+    .img-box {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1.5px solid var(--card-border);
+      background: #0f172a;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+    .img-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .pillar-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 2px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.25s ease;
+    }
+    .pillar-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .pillar-tag {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+    }
+    .pillar-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 14px;
+    }
+    .pillar-list {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pillar-list strong {
+      color: #fff;
+    }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 36px;
+      border-top: 1px solid var(--card-border);
+      background: rgba(11, 15, 25, 0.9);
+      backdrop-filter: blur(12px);
+    }
+    .counter {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+    .prog-bar {
+      flex: 1;
+      max-width: 440px;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 24px;
+    }
+    .prog-fill {
+      height: 100%;
+      width: 12.5%;
+      background: linear-gradient(90deg, var(--primary), var(--emerald));
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+  <div class="ambient-glow-2"></div>
+
+  <!-- Header -->
+  <header>
+    <div style="display:flex; align-items:center;">
+      <span class="logo-badge">HACKNOVATE 2026</span>
+      <span class="logo-title">CivicPulse AI <span style="font-size:13px; font-weight:400; color:var(--text-dim);">| Solution Pitch (PS 9)</span></span>
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="toggleFullScreen()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        Fullscreen (F)
+      </button>
+      <a href="CivicPulse_Solution_Pitch.pdf" download class="btn" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Download PDF
+      </a>
+      <a href="CivicPulse_Solution_Pitch.pptx" download class="btn primary">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download PPTX
+      </a>
+    </div>
+  </header>
+
+  <!-- Viewport -->
+  <main class="deck-viewport">
+
+    <!-- SLIDE 1: COVER -->
+    <section class="slide active" id="slide-1">
+      <div style="display:grid; grid-template-columns: 1.15fr 0.85fr; gap: 32px; height: 100%; align-items: center;">
+        <div>
+          <span class="slide-badge">PROBLEM STATEMENT 9 SOLUTION</span>
+          <h1 style="font-size: 56px; font-weight: 900; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 8px;">
+            CivicPulse <span style="background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">AI</span>
+          </h1>
+          <p style="font-size: 22px; color: var(--indigo); font-weight: 700; margin-bottom: 16px;">
+            Autonomous Civic Issue Intelligence & Transparent Resolution Protocol
+          </p>
+          <p style="font-size: 16px; color: var(--text-muted); line-height: 1.6; margin-bottom: 28px;">
+            Transforming civic complaints from a passive black hole into an active, intelligent governance pipeline powered by 
+            <strong>Explainable Dynamic Priority Scoring (EDPS)</strong>, <strong>Duplicate Ticket Suppression</strong>, and <strong>Before/After Proof-of-Fix</strong>.
+          </p>
+
+          <div style="display:flex; flex-direction: column; gap: 10px;">
+            <div style="display:flex; align-items:center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--primary);">
+              <span style="font-size: 20px;">✔</span> Explainable Dynamic Priority Scoring (0–100 EDPS Engine)
+            </div>
+            <div style="display:flex; align-items:center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--emerald);">
+              <span style="font-size: 20px;">✔</span> Intelligent "Duplicate Shield" (+1 Crowd Upvoting)
+            </div>
+            <div style="display:flex; align-items:center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--amber);">
+              <span style="font-size: 20px;">✔</span> Verifiable "Proof-of-Fix" Protocol (CV Diff & Consensus)
+            </div>
+          </div>
+        </div>
+
+        <div class="img-box" style="height: 520px; border: 2px solid var(--primary); box-shadow: 0 15px 40px rgba(56, 189, 248, 0.2);">
+          <img src="assets/hero_illustration.jpg" alt="CivicPulse 3D Mockup">
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: THE 3 PILLARS -->
+    <section class="slide" id="slide-2">
+      <span class="slide-badge" style="color: var(--emerald); border-color: rgba(52, 211, 153, 0.3);">OUR PROPOSED SOLUTION</span>
+      <h2 class="slide-title">CivicPulse: The 3 Pillars of Our Solution</h2>
+      <p class="slide-subtitle">A balanced tri-party platform uniting Citizens, Algorithmic Prioritization, and Municipal Field Teams.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; flex: 1;">
+        <div class="pillar-card" style="border-color: var(--emerald);">
+          <div class="pillar-tag" style="color: var(--emerald);">PILLAR 1: SMART REPORTING</div>
+          <div class="pillar-title">Frictionless Edge Capture</div>
+          <div class="pillar-list">
+            <div>• <strong>Instant Geo-Tagging:</strong> 1-click photo auto-extracts EXIF GPS coordinates & reverse geocodes the exact street address.</div>
+            <div>• <strong>AI Multimodal Vision:</strong> Automatically classifies issue category (Pothole, Waste, Streetlight) with confidence %.</div>
+            <div>• <strong>Voice-First Regional Input:</strong> Speak grievances in Hindi or English with real-time speech transcription.</div>
+            <div>• <strong>Zero Login Barrier:</strong> Lightweight anonymous reporting token ensures 100% citizen adoption.</div>
+          </div>
+        </div>
+
+        <div class="pillar-card" style="border-color: var(--primary);">
+          <div class="pillar-tag" style="color: var(--primary);">PILLAR 2: ALGORITHMIC TRIAGE</div>
+          <div class="pillar-title">Explainable Priority (EDPS)</div>
+          <div class="pillar-list">
+            <div>• <strong>Mathematical Formulation:</strong> Calculates a dynamic 0–100 severity index combining 5 real-time vectors.</div>
+            <div>• <strong>Geospatial Zone Proximity:</strong> Distance-decay boost for issues near hospitals, schools, and transit arteries.</div>
+            <div>• <strong>Civic Equity Guarantee:</strong> Prevents less digitized wards from being deprioritized due to smartphone disparity.</div>
+            <div>• <strong>Human-Readable Audit:</strong> Plain-English explanation card detailing why the score was given.</div>
+          </div>
+        </div>
+
+        <div class="pillar-card" style="border-color: var(--indigo);">
+          <div class="pillar-tag" style="color: var(--indigo);">PILLAR 3: PUBLIC ACCOUNTABILITY</div>
+          <div class="pillar-title">Verifiable Proof-of-Fix</div>
+          <div class="pillar-list">
+            <div>• <strong>Before / After CV Diff:</strong> Field crew must upload an After photo at the exact GPS coordinates; CV audits repair.</div>
+            <div>• <strong>Community Consensus Gate:</strong> Original reporter & nearby citizens vote to confirm quality before ticket archives.</div>
+            <div>• <strong>Public Milestone Tracker:</strong> 5-stage progress tracking from Reported → Triaged → Dispatched → Verified.</div>
+            <div>• <strong>Ward SLA Scorecards:</strong> Transparent leaderboard holding municipal contractors accountable.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: 4-STEP WORKFLOW -->
+    <section class="slide" id="slide-3">
+      <span class="slide-badge">SYSTEM WORKFLOW</span>
+      <h2 class="slide-title">How It Works: 4 Transparent Steps to Resolution</h2>
+      <p class="slide-subtitle">From citizen smartphone to automated triage, field repair, and public verification.</p>
+
+      <div class="img-box" style="margin-bottom: 20px;">
+        <img src="assets/pipeline_graphic.png" alt="Workflow Pipeline">
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+        <div style="background: rgba(15,23,42,0.8); border: 1px solid var(--emerald); border-radius: 12px; padding: 16px;">
+          <div style="color: var(--emerald); font-weight: 800; font-size: 14px; margin-bottom: 4px;">Step 1: Smart Capture</div>
+          <div style="font-size: 13px; color: var(--text-muted);">Auto EXIF GPS parsing, AI category tagger, and 50m proximity duplicate check.</div>
+        </div>
+        <div style="background: rgba(15,23,42,0.8); border: 1px solid var(--primary); border-radius: 12px; padding: 16px;">
+          <div style="color: var(--primary); font-weight: 800; font-size: 14px; margin-bottom: 4px;">Step 2: AI Triage (EDPS)</div>
+          <div style="font-size: 13px; color: var(--text-muted);">Dynamic 0–100 priority score calculated with hospital proximity and crowd echo.</div>
+        </div>
+        <div style="background: rgba(15,23,42,0.8); border: 1px solid var(--amber); border-radius: 12px; padding: 16px;">
+          <div style="color: var(--amber); font-weight: 800; font-size: 14px; margin-bottom: 4px;">Step 3: Ward Dispatch</div>
+          <div style="font-size: 13px; color: var(--text-muted);">Auto-routed to ward department (PWD/Sanitation) with a strict SLA countdown clock.</div>
+        </div>
+        <div style="background: rgba(15,23,42,0.8); border: 1px solid var(--indigo); border-radius: 12px; padding: 16px;">
+          <div style="color: var(--indigo); font-weight: 800; font-size: 14px; margin-bottom: 4px;">Step 4: Proof-of-Fix</div>
+          <div style="font-size: 13px; color: var(--text-muted);">Geotagged after photo verified by CV differencing, backed by citizen consensus vote.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: EDPS ENGINE -->
+    <section class="slide" id="slide-4">
+      <span class="slide-badge">THE ALGORITHMIC BREAKTHROUGH</span>
+      <h2 class="slide-title">The Core Innovation: Explainable Dynamic Priority Scoring (EDPS)</h2>
+      <p class="slide-subtitle">Solving PS 9's real challenge: genuine mathematical prioritization with transparent human reasoning.</p>
+
+      <div class="img-box" style="margin-bottom: 16px; border: 2px solid var(--primary);">
+        <img src="assets/priority_dial.png" alt="Priority Dial">
+      </div>
+
+      <div style="background: linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(99, 102, 241, 0.2)); border: 1.5px solid var(--primary); border-radius: 10px; padding: 12px 20px; text-align: center;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: #fff;">
+          THE FORMULA: Priority = min( 100, &nbsp;0.30·Sv [Hazard] + 0.25·Zw [Zone] + 0.20·Cv [Velocity] + 0.15·Eq [Equity] + 0.10·Te [SLA] )
+        </span>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: DUPLICATE SHIELD -->
+    <section class="slide" id="slide-5">
+      <span class="slide-badge" style="color: var(--emerald); border-color: rgba(52, 211, 153, 0.3);">MUNICIPAL EFFICIENCY</span>
+      <h2 class="slide-title">Innovation #2: The "Duplicate Shield" (Solving Alert Fatigue)</h2>
+      <p class="slide-subtitle">Turning 40 redundant complaints into 1 high-velocity master ticket with crowd confirmation.</p>
+
+      <div class="img-box" style="margin-bottom: 16px; border: 2px solid var(--emerald);">
+        <img src="assets/duplicate_shield_graphic.png" alt="Duplicate Shield">
+      </div>
+
+      <div style="background: rgba(16, 75, 45, 0.6); border: 1.5px solid var(--emerald); border-radius: 10px; padding: 12px 20px; text-align: center;">
+        <span style="font-size: 15px; font-weight: 800; color: var(--emerald);">
+          IMPACT: 75% Reduction in Database Bloat &bull; Zero Alert Fatigue &bull; Instant Emergency Surge Velocity
+        </span>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: PROOF-OF-FIX -->
+    <section class="slide" id="slide-6">
+      <span class="slide-badge" style="color: var(--indigo); border-color: rgba(129, 140, 248, 0.3);">ACCOUNTABILITY & TRUST</span>
+      <h2 class="slide-title">Innovation #3: The "Proof-of-Fix" Protocol (Closing the Loop)</h2>
+      <p class="slide-subtitle">Eliminating arbitrary "Resolved" stamps with Computer Vision Before/After verification and citizen consensus.</p>
+
+      <div class="img-box" style="margin-bottom: 16px; border: 2px solid var(--indigo);">
+        <img src="assets/before_after_proof.png" alt="Before/After Proof">
+      </div>
+
+      <div style="background: rgba(49, 46, 129, 0.6); border: 1.5px solid var(--indigo); border-radius: 10px; padding: 12px 20px; text-align: center;">
+        <span style="font-size: 15px; font-weight: 800; color: #fff;">
+          CLOSING THE LOOP: Geotagged Photo Lock &bull; AI Computer Vision Difference Analysis &bull; 24h Community Consensus Gate
+        </span>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: TWO-SIDED PLATFORM -->
+    <section class="slide" id="slide-7">
+      <span class="slide-badge">TWO-SIDED PLATFORM</span>
+      <h2 class="slide-title">Public Resolution Tracker & Municipal Command Center</h2>
+      <p class="slide-subtitle">Empowering citizens with full transparency while equipping city engineers with real-time GIS operations.</p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1;">
+        <div style="background: rgba(15,23,42,0.8); border: 2px solid var(--primary); border-radius: 16px; padding: 24px;">
+          <div style="color: var(--primary); font-size: 12px; font-weight: 800; text-transform: uppercase;">FOR CITIZENS</div>
+          <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 16px;">Public Transparency Tracker</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; font-size: 15px; color: var(--text-muted);">
+            <div>• <strong>Live 5-Stage Journey:</strong> Submitted &rarr; Triaged &rarr; Dispatched &rarr; Repaired &rarr; Verified.</div>
+            <div>• <strong>Interactive GIS City Map:</strong> Search any ward to inspect active and completed repairs.</div>
+            <div>• <strong>Explainability Cards:</strong> Every ticket clearly shows why it received its priority score.</div>
+            <div>• <strong>Community Voice:</strong> Vote on the quality of completed repairs right from your phone.</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(15,23,42,0.8); border: 2px solid var(--amber); border-radius: 16px; padding: 24px;">
+          <div style="color: var(--amber); font-size: 12px; font-weight: 800; text-transform: uppercase;">FOR CITY OFFICIALS</div>
+          <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 16px;">Municipal Command Center</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; font-size: 15px; color: var(--text-muted);">
+            <div>• <strong>Geospatial Hotspot Heatmap:</strong> Visual density clusters of road, sewer, and light failures.</div>
+            <div>• <strong>Automated SLA Countdown:</strong> Critical issues trigger strict 24h clocks with auto-escalation.</div>
+            <div>• <strong>Work-Order Routing:</strong> Direct dispatching to specific ward departments (PWD, Sanitation).</div>
+            <div>• <strong>Ward Performance Scorecard:</strong> Ranks contractors by fix speed, quality, and citizen satisfaction.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: THANK YOU SLIDE -->
+    <section class="slide" id="slide-8">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; text-align: center; padding: 20px 40px;">
+        <span class="slide-badge" style="margin-bottom: 16px;">HACKNOVATE 2026 &bull; PROBLEM STATEMENT 9</span>
+        <h1 style="font-size: 72px; font-weight: 900; letter-spacing: -2px; margin-bottom: 12px;">
+          Thank <span style="background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">You!</span>
+        </h1>
+        <p style="font-size: 24px; font-weight: 700; color: var(--indigo); margin-bottom: 24px; max-width: 900px;">
+          CivicPulse AI: Turning Civic Frustration into Prioritized, Transparent Civic Action.
+        </p>
+
+        <div style="background: rgba(15,23,42,0.8); border: 2px solid var(--emerald); border-radius: 14px; padding: 16px 36px; margin-bottom: 32px;">
+          <span style="font-size: 20px; font-weight: 800; color: var(--emerald);">
+            We are open for Questions & Feedback
+          </span>
+        </div>
+
+        <div style="display: flex; gap: 20px; font-size: 14px; color: var(--text-muted); font-weight: 600;">
+          <div style="background: rgba(255,255,255,0.06); padding: 8px 18px; border-radius: 8px; border: 1px solid var(--card-border);">
+            AI Explainable Priority (EDPS)
+          </div>
+          <div style="background: rgba(255,255,255,0.06); padding: 8px 18px; border-radius: 8px; border: 1px solid var(--card-border);">
+            Duplicate Shield (+1 Upvotes)
+          </div>
+          <div style="background: rgba(255,255,255,0.06); padding: 8px 18px; border-radius: 8px; border: 1px solid var(--card-border);">
+            Verifiable Proof-of-Fix Protocol
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Navigation -->
+  <footer>
+    <div class="counter" id="slideCount">Slide 1 of 8</div>
+    <div class="prog-bar">
+      <div class="prog-fill" id="progFill"></div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn" onclick="prevSlide()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Prev
+      </button>
+      <button class="btn primary" onclick="nextSlide()">
+        Next
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    let cur = 1;
+    const total = 8;
+
+    function renderSlide() {
+      document.querySelectorAll('.slide').forEach((s, idx) => {
+        if (idx + 1 === cur) s.classList.add('active');
+        else s.classList.remove('active');
+      });
+      document.getElementById('slideCount').innerText = `Slide ${cur} of ${total}`;
+      document.getElementById('progFill').style.width = `${(cur / total) * 100}%`;
+    }
+
+    function nextSlide() {
+      if (cur < total) { cur++; renderSlide(); }
+    }
+    function prevSlide() {
+      if (cur > 1) { cur--; renderSlide(); }
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullScreen();
+      }
+    });
+
+    renderSlide();
+  </script>
+</body>
+</html>
