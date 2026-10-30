@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import L from 'leaflet';
 import {
   MapPin,
@@ -9,10 +10,12 @@ import {
   AlertTriangle,
   RotateCw,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { Complaint, ComplaintCategory, PriorityBand } from '../../types';
 import { ALL_INDIAN_STATES } from '../../lib/indiaGeoService';
+import { CATEGORY_LABELS } from '../../lib/imageClassifier';
 
 export const LiveMapSection: React.FC = () => {
   const { complaints, setActiveTab, setSelectedComplaintId } = useCivicData();
@@ -32,7 +35,7 @@ export const LiveMapSection: React.FC = () => {
   );
 
   // Filtered Complaints
-  const filteredComplaints = complaints.filter(c => {
+  const filteredComplaints = complaints.filter((c) => {
     if (selectedState !== 'all' && c.state !== selectedState) return false;
     if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
     if (selectedPriority !== 'all' && c.edpsBand !== selectedPriority) return false;
@@ -83,7 +86,7 @@ export const LiveMapSection: React.FC = () => {
 
     if (filteredComplaints.length === 0) return;
 
-    filteredComplaints.forEach(c => {
+    filteredComplaints.forEach((c) => {
       const isCritical = c.edpsBand === 'critical';
       const isVerified = c.status === 'verified';
       const pinColor = isVerified ? '#10B981' : isCritical ? '#E05B2D' : '#0F3A36';
@@ -100,13 +103,13 @@ export const LiveMapSection: React.FC = () => {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Inter', system-ui, sans-serif;
             font-weight: 800;
             font-size: 11px;
             border: 2px solid #FFFDF8;
             box-shadow: 0 4px 12px rgba(15,58,54,0.35);
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           " class="hover:scale-110">
             ${c.edpsScore}
           </div>
@@ -119,7 +122,7 @@ export const LiveMapSection: React.FC = () => {
       marker.on('click', () => {
         setActivePinComplaint(c);
         if (mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([c.latitude, c.longitude], 14, { duration: 1.2 });
+          mapInstanceRef.current.flyTo([c.latitude, c.longitude], 13, { duration: 1.0 });
         }
       });
       marker.addTo(layer);
@@ -127,7 +130,7 @@ export const LiveMapSection: React.FC = () => {
 
     // Fit bounds if markers exist
     if (filteredComplaints.length > 0 && mapInstanceRef.current) {
-      const bounds = L.latLngBounds(filteredComplaints.map(c => [c.latitude, c.longitude]));
+      const bounds = L.latLngBounds(filteredComplaints.map((c) => [c.latitude, c.longitude]));
       mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
   }, [filteredComplaints]);
@@ -168,11 +171,11 @@ export const LiveMapSection: React.FC = () => {
         {/* State Filter */}
         <select
           value={selectedState}
-          onChange={e => setSelectedState(e.target.value)}
-          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest"
+          onChange={(e) => setSelectedState(e.target.value)}
+          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest transition-colors"
         >
           <option value="all">All States & UTs</option>
-          {ALL_INDIAN_STATES.map(s => (
+          {ALL_INDIAN_STATES.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -182,8 +185,8 @@ export const LiveMapSection: React.FC = () => {
         {/* Category Filter */}
         <select
           value={selectedCategory}
-          onChange={e => setSelectedCategory(e.target.value)}
-          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest"
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest transition-colors"
         >
           <option value="all">All Categories</option>
           <option value="road_damage">Roads & Potholes</option>
@@ -198,8 +201,8 @@ export const LiveMapSection: React.FC = () => {
         {/* Priority Filter */}
         <select
           value={selectedPriority}
-          onChange={e => setSelectedPriority(e.target.value)}
-          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest"
+          onChange={(e) => setSelectedPriority(e.target.value)}
+          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest transition-colors"
         >
           <option value="all">All Priorities</option>
           <option value="critical">Critical (EDPS ≥ 75)</option>
@@ -211,8 +214,8 @@ export const LiveMapSection: React.FC = () => {
         {/* Status Filter */}
         <select
           value={selectedStatus}
-          onChange={e => setSelectedStatus(e.target.value)}
-          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest"
+          onChange={(e) => setSelectedStatus(e.target.value)}
+          className="px-3 py-1.5 bg-ivory rounded-xl border border-sage text-charcoal font-semibold text-xs focus:outline-none focus:border-forest transition-colors"
         >
           <option value="all">All Statuses</option>
           <option value="active">Active Grievances</option>
@@ -246,73 +249,86 @@ export const LiveMapSection: React.FC = () => {
 
         {/* Selected Complaint Detail Preview Panel */}
         <div className="lg:col-span-4 h-full bg-softwhite rounded-3xl p-5 border border-sage shadow-card flex flex-col justify-between overflow-y-auto text-xs">
-          {activePinComplaint ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-sage/60 pb-3">
-                <span className="font-mono font-extrabold text-forest text-sm">
-                  #{activePinComplaint.id}
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                    activePinComplaint.edpsBand === 'critical'
-                      ? 'bg-peach text-burnt'
-                      : activePinComplaint.status === 'verified'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-sage text-forest'
-                  }`}
-                >
-                  Priority {activePinComplaint.edpsScore} • {activePinComplaint.status.replace(/_/g, ' ')}
-                </span>
-              </div>
-
-              {activePinComplaint.photoUrl && (
-                <div className="h-36 rounded-2xl overflow-hidden border border-sage bg-ivory">
-                  <img
-                    src={activePinComplaint.photoUrl}
-                    alt={activePinComplaint.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div>
-                <h3 className="text-sm font-bold text-forest">{activePinComplaint.title}</h3>
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-muted mt-1 truncate">
-                  <MapPin size={13} className="text-forest flex-shrink-0" />
-                  <span className="truncate">
-                    {activePinComplaint.address} ({activePinComplaint.district}, {activePinComplaint.state})
+          <AnimatePresence mode="wait">
+            {activePinComplaint ? (
+              <motion.div
+                key={activePinComplaint.id}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center justify-between border-b border-sage/60 pb-3">
+                  <span className="font-mono font-extrabold text-forest text-sm">
+                    #{activePinComplaint.id}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                      activePinComplaint.edpsBand === 'critical'
+                        ? 'bg-peach text-burnt'
+                        : activePinComplaint.status === 'verified'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-sage text-forest'
+                    }`}
+                  >
+                    Priority {activePinComplaint.edpsScore} • {activePinComplaint.status.replace(/_/g, ' ')}
                   </span>
                 </div>
-              </div>
 
-              <p className="text-xs text-charcoal leading-relaxed line-clamp-3">
-                {activePinComplaint.description}
-              </p>
+                {activePinComplaint.photoUrl && (
+                  <div className="h-36 rounded-2xl overflow-hidden border border-sage bg-ivory">
+                    <img
+                      src={activePinComplaint.photoUrl}
+                      alt={activePinComplaint.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
 
-              <div className="p-3 bg-ivory rounded-xl border border-sage text-[11px] space-y-1">
-                <div className="font-bold text-forest">Mathematical EDPS Triage:</div>
-                <div className="text-charcoal-muted line-clamp-2">
-                  {activePinComplaint.edpsExplanation}
+                <div>
+                  <h3 className="text-sm font-bold text-forest">
+                    {CATEGORY_LABELS[activePinComplaint.category] || activePinComplaint.title}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-charcoal-muted mt-1 truncate">
+                    <MapPin size={13} className="text-forest flex-shrink-0" />
+                    <span className="truncate">
+                      {activePinComplaint.address} ({activePinComplaint.district}, {activePinComplaint.state})
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <button
-                onClick={() => {
-                  setSelectedComplaintId(activePinComplaint.id);
-                  setActiveTab('track');
-                }}
-                className="w-full py-2.5 bg-forest hover:bg-forest-hover text-softwhite rounded-xl font-bold text-xs shadow-card flex items-center justify-center gap-1.5 transition-all"
-              >
-                <span>Track Visual Impact Trail</span>
-                <ArrowRight size={13} />
-              </button>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-charcoal-muted">
-              <MapPin size={24} className="text-burnt" />
-              <p>Click on any pin on the map to inspect its real-time operational status.</p>
-            </div>
-          )}
+                <p className="text-xs text-charcoal leading-relaxed line-clamp-3">
+                  {activePinComplaint.description}
+                </p>
+
+                <div className="p-3 bg-ivory rounded-xl border border-sage text-[11px] space-y-1">
+                  <div className="font-bold text-forest">Mathematical EDPS Triage:</div>
+                  <div className="text-charcoal-muted line-clamp-2">
+                    {activePinComplaint.edpsExplanation}
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setSelectedComplaintId(activePinComplaint.id);
+                    setActiveTab('track');
+                  }}
+                  className="w-full py-2.5 bg-forest hover:bg-forest-hover text-softwhite rounded-xl font-bold text-xs shadow-card flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <span>Track Visual Impact Trail</span>
+                  <ArrowRight size={13} />
+                </motion.button>
+              </motion.div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-charcoal-muted">
+                <MapPin size={24} className="text-burnt" />
+                <p>Click on any pin on the map to inspect its real-time operational status.</p>
+              </div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </section>

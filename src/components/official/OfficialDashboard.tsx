@@ -41,9 +41,9 @@ export const OfficialDashboard: React.FC = () => {
 
   // 1. Calculate four exact counts from real database records
   const totalCount = complaints.length;
-  const pendingCount = complaints.filter(c => getCanonicalStatus(c.status) === 'submitted').length;
-  const inProgressCount = complaints.filter(c => getCanonicalStatus(c.status) === 'in_progress').length;
-  const resolvedCount = complaints.filter(c => getCanonicalStatus(c.status) === 'resolved').length;
+  const pendingCount = complaints.filter((c) => getCanonicalStatus(c.status) === 'submitted').length;
+  const inProgressCount = complaints.filter((c) => getCanonicalStatus(c.status) === 'in_progress').length;
+  const resolvedCount = complaints.filter((c) => getCanonicalStatus(c.status) === 'resolved').length;
 
   // 2. Priority calculation engine (severity + safety risk + age + crowd upvotes)
   const getPriorityData = (c: Complaint) => {
@@ -67,10 +67,10 @@ export const OfficialDashboard: React.FC = () => {
 
   // Sort complaints by priority score descending
   const sortedComplaints = [...complaints]
-    .map(c => ({ ...c, priorityData: getPriorityData(c) }))
+    .map((c) => ({ ...c, priorityData: getPriorityData(c) }))
     .sort((a, b) => b.priorityData.score - a.priorityData.score);
 
-  const filteredComplaints = sortedComplaints.filter(c => {
+  const filteredComplaints = sortedComplaints.filter((c) => {
     if (filterPriority === 'all') return true;
     return c.priorityData.level === filterPriority;
   });
@@ -82,11 +82,16 @@ export const OfficialDashboard: React.FC = () => {
     setTimeout(() => {
       setUpdatingId(null);
       if (ok) {
-        const label = newStatus === 'submitted' ? 'Pending' : newStatus === 'in_progress' ? 'In Progress' : 'Resolved';
+        const label =
+          newStatus === 'submitted'
+            ? 'Pending Triage'
+            : newStatus === 'in_progress'
+            ? 'In Progress (Crew Dispatched)'
+            : 'Resolved (Proof Verified)';
         setSuccessToast(`Complaint #${complaintId} updated to "${label}"`);
         setTimeout(() => setSuccessToast(null), 3000);
       }
-    }, 300);
+    }, 280);
   };
 
   return (
@@ -100,7 +105,7 @@ export const OfficialDashboard: React.FC = () => {
             exit={{ opacity: 0, y: -20 }}
             className="fixed top-20 right-4 sm:right-8 bg-forest text-softwhite px-4 py-3 rounded-2xl shadow-elevated border border-sage z-50 flex items-center gap-2 text-xs font-bold"
           >
-            <CheckCircle2 size={16} className="text-emerald-400" />
+            <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
             <span>{successToast}</span>
           </motion.div>
         )}
@@ -116,12 +121,15 @@ export const OfficialDashboard: React.FC = () => {
             Government Operations Portal
           </h1>
           <p className="text-xs text-charcoal-muted mt-0.5">
-            Priority-ordered intake queue with real-time status dispatch.
+            Priority-ordered intake queue with real-time status dispatch and contractor tracking.
           </p>
         </div>
 
         {/* Demo Fast Login Helper if not authenticated as official */}
-        {(!currentUser || (currentUser.role !== 'government' && currentUser.role !== 'official' && currentUser.role !== 'super_admin')) && (
+        {(!currentUser ||
+          (currentUser.role !== 'government' &&
+            currentUser.role !== 'official' &&
+            currentUser.role !== 'super_admin')) && (
           <button
             onClick={() => loginWithPassword('gov@civictrace.gov.in', 'OfficialPWD2026!')}
             className="px-4 py-2 bg-ivory hover:bg-sage/40 border border-sage rounded-xl text-xs font-bold text-forest transition-colors self-start md:self-auto"
@@ -132,7 +140,7 @@ export const OfficialDashboard: React.FC = () => {
       </div>
 
       {/* ==================================================================== */}
-      {/* 2.A FOUR COMPLAINT STATISTICS (FROM REAL DATABASE RECORDS)           */}
+      {/* FOUR COMPLAINT STATISTICS (FROM REAL DATABASE RECORDS)               */}
       {/* ==================================================================== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Complaints */}
@@ -146,9 +154,7 @@ export const OfficialDashboard: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider">Total Issues</span>
             <FileText size={16} className="text-forest" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-forest">
-            {totalCount}
-          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-forest">{totalCount}</div>
           <span className="text-[10px] text-charcoal-muted">Registered in database</span>
         </motion.div>
 
@@ -163,9 +169,7 @@ export const OfficialDashboard: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider">Pending</span>
             <Clock size={16} className="text-amber-600" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-amber-700">
-            {pendingCount}
-          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-amber-700">{pendingCount}</div>
           <span className="text-[10px] text-amber-600">Awaiting triage & work</span>
         </motion.div>
 
@@ -180,9 +184,7 @@ export const OfficialDashboard: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider">In Progress</span>
             <Wrench size={16} className="text-teal-600" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-teal-700">
-            {inProgressCount}
-          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-teal-700">{inProgressCount}</div>
           <span className="text-[10px] text-teal-600">Field crews deployed</span>
         </motion.div>
 
@@ -197,15 +199,13 @@ export const OfficialDashboard: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider">Resolved</span>
             <CheckCircle2 size={16} className="text-emerald-600" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700">
-            {resolvedCount}
-          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700">{resolvedCount}</div>
           <span className="text-[10px] text-emerald-600">Completed & verified</span>
         </motion.div>
       </div>
 
       {/* ==================================================================== */}
-      {/* 2.B PRIORITY-ORDERED COMPLAINTS LIST                                 */}
+      {/* PRIORITY-ORDERED COMPLAINTS LIST                                     */}
       {/* ==================================================================== */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -249,7 +249,13 @@ export const OfficialDashboard: React.FC = () => {
                 <motion.div
                   key={complaint.id}
                   layout
-                  className="bg-softwhite rounded-2xl border border-sage p-4 shadow-card hover:shadow-elevated transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  className={`bg-softwhite rounded-2xl border border-sage p-4 shadow-card hover:shadow-elevated transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                    level === 'High'
+                      ? 'border-l-4 border-l-rose-500'
+                      : level === 'Medium'
+                      ? 'border-l-4 border-l-amber-500'
+                      : 'border-l-4 border-l-teal-600'
+                  }`}
                 >
                   {/* Left: Thumbnail & Details */}
                   <div className="flex items-start gap-3.5 flex-1 min-w-0">
@@ -285,7 +291,7 @@ export const OfficialDashboard: React.FC = () => {
                               : 'bg-sage/40 text-forest border-sage'
                           }`}
                         >
-                          {level} Priority
+                          {level} Priority (Score {complaint.edpsScore})
                         </span>
 
                         {/* Upvotes */}
@@ -312,9 +318,7 @@ export const OfficialDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* ========================================================== */}
-                  {/* 2.C STATUS CHANGER (PENDING, IN PROGRESS, RESOLVED)        */}
-                  {/* ========================================================== */}
+                  {/* STATUS CHANGER (PENDING, IN PROGRESS, RESOLVED) */}
                   <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-sage/60 flex-shrink-0">
                     <span className="text-xs font-bold text-charcoal-muted mr-1 hidden sm:inline">
                       Status:
@@ -361,9 +365,7 @@ export const OfficialDashboard: React.FC = () => {
                       </button>
                     </div>
 
-                    {isUpdating && (
-                      <RotateCw size={14} className="animate-spin text-burnt ml-1" />
-                    )}
+                    {isUpdating && <RotateCw size={14} className="animate-spin text-burnt ml-1" />}
                   </div>
                 </motion.div>
               );

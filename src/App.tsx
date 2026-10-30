@@ -5,9 +5,11 @@ import { Footer } from './components/layout/Footer';
 // Living Network Animated Background
 import { LivingNetworkBackground } from './components/visual/LivingNetworkBackground';
 
-// Homepage Sections (Clean & Focused)
+// Homepage Sections (Clean, Narrative & Focused)
 import { HeroSection } from './components/home/HeroSection';
+import { HowItWorks } from './components/home/HowItWorks';
 import { LiveMapSection } from './components/home/LiveMapSection';
+import { LiquidGlassSection } from './components/home/LiquidGlassSection';
 import { RecentComplaintsSection } from './components/home/RecentComplaintsSection';
 
 // Citizen & Government views
@@ -45,13 +47,13 @@ export const AppContent: React.FC = () => {
 
       {/* Main Viewport */}
       <main className="flex-1 relative z-10">
-        {/* HOMEPAGE VIEW: Hero, Live Map, & Recent Complaints */}
+        {/* HOMEPAGE VIEW: Hero, Signature Journey, Map, Optics, & Recent Complaints */}
         {activeTab === 'home' && (
           <div className="space-y-6">
-            <HeroSection
-              onOpenReportModal={handleOpenReport}
-            />
+            <HeroSection onOpenReportModal={handleOpenReport} />
+            <HowItWorks />
             <LiveMapSection />
+            <LiquidGlassSection />
             <RecentComplaintsSection onOpenReportModal={handleOpenReport} />
           </div>
         )}

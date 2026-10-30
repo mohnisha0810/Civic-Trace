@@ -1,9 +1,19 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { MapPin, ThumbsUp, ArrowRight, PlusCircle, Clock, CheckCircle2, Wrench } from 'lucide-react';
+import {
+  MapPin,
+  ThumbsUp,
+  ArrowRight,
+  PlusCircle,
+  Clock,
+  CheckCircle2,
+  Wrench,
+  ChevronRight,
+} from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { useAuth } from '../../context/AuthContext';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
+import { ComplaintStatusJourney } from '../citizen/TrackComplaintView';
 
 interface RecentComplaintsSectionProps {
   onOpenReportModal: () => void;
@@ -52,14 +62,14 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
           </span>
           <h2 className="text-2xl font-bold text-forest mt-1">Recently Reported Complaints</h2>
           <p className="text-xs text-charcoal-muted mt-0.5">
-            Transparent registry of grievances logged by verified citizens.
+            Transparent registry of grievances logged by verified citizens across India.
           </p>
         </div>
 
         {complaints.length > 0 && (
           <button
             onClick={() => setActiveTab('track')}
-            className="text-xs font-bold text-forest hover:text-burnt flex items-center gap-1.5 transition-colors"
+            className="text-xs font-bold text-forest hover:text-burnt flex items-center gap-1.5 transition-colors self-start sm:self-auto"
           >
             <span>View All in Tracker</span>
             <ArrowRight size={14} />
@@ -69,30 +79,38 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
 
       {recent.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recent.map((complaint) => {
+          {recent.map((complaint, index) => {
             const hasUpvoted = complaint.upvotedByUserIds.includes(currentUserId);
 
             return (
               <motion.div
                 key={complaint.id}
-                whileHover={{ y: -3 }}
-                transition={{ duration: 0.2 }}
-                className="bg-softwhite rounded-2xl border border-sage shadow-card hover:shadow-elevated transition-all flex flex-col justify-between overflow-hidden"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.05, 0.25) }}
+                whileHover={{ y: -4 }}
+                className="bg-softwhite rounded-2xl border border-sage shadow-card hover:shadow-elevated transition-all flex flex-col justify-between overflow-hidden group"
               >
                 <div className="p-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-md bg-ivory border border-sage text-forest">
+                    <span className="font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-md bg-ivory border border-sage text-forest">
                       #{complaint.id}
                     </span>
                     {getStatusBadge(complaint.status)}
                   </div>
 
                   {complaint.photoUrl && (
-                    <div className="h-36 rounded-xl overflow-hidden border border-sage bg-ivory">
+                    <div
+                      onClick={() => {
+                        setSelectedComplaintId(complaint.id);
+                        setActiveTab('track');
+                      }}
+                      className="h-36 rounded-xl overflow-hidden border border-sage bg-ivory cursor-pointer"
+                    >
                       <img
                         src={complaint.photoUrl}
                         alt={complaint.title}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                   )}
@@ -114,7 +132,10 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-muted truncate">
+                  {/* Compact Status Journey */}
+                  <ComplaintStatusJourney status={complaint.status} isCompact={true} />
+
+                  <div className="flex items-center gap-1.5 text-xs text-charcoal-muted truncate pt-1">
                     <MapPin size={13} className="text-forest flex-shrink-0" />
                     <span className="truncate">{complaint.address}</span>
                   </div>
@@ -125,14 +146,19 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
                   <motion.button
                     whileTap={{ scale: 0.88 }}
                     onClick={() => upvoteComplaint(complaint.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all ${
                       hasUpvoted
                         ? 'bg-burnt text-softwhite shadow-xs font-bold'
-                        : 'text-charcoal-muted hover:text-burnt'
+                        : 'bg-softwhite hover:bg-sage/40 text-charcoal border border-sage'
                     }`}
                   >
-                    <ThumbsUp size={13} className={hasUpvoted ? 'text-softwhite' : 'text-burnt'} />
-                    <span>{complaint.upvotes} {complaint.upvotes === 1 ? 'Upvote' : 'Upvotes'}</span>
+                    <motion.div
+                      animate={hasUpvoted ? { scale: [1, 1.3, 1] } : {}}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <ThumbsUp size={12} className={hasUpvoted ? 'text-softwhite' : 'text-burnt'} />
+                    </motion.div>
+                    <span>{complaint.upvotes}</span>
                   </motion.button>
 
                   <button
@@ -140,10 +166,10 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
                       setSelectedComplaintId(complaint.id);
                       setActiveTab('track');
                     }}
-                    className="font-bold text-forest hover:text-burnt flex items-center gap-1 transition-colors"
+                    className="text-xs font-bold text-forest hover:text-burnt flex items-center gap-1 transition-colors"
                   >
                     <span>Track</span>
-                    <ArrowRight size={13} />
+                    <ChevronRight size={13} />
                   </button>
                 </div>
               </motion.div>
@@ -151,23 +177,8 @@ export const RecentComplaintsSection: React.FC<RecentComplaintsSectionProps> = (
           })}
         </div>
       ) : (
-        /* Empty State */
-        <div className="bg-softwhite rounded-3xl p-10 border border-sage shadow-card text-center max-w-lg mx-auto space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-sage flex items-center justify-center text-forest mx-auto">
-            <PlusCircle size={24} className="text-burnt" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-bold text-forest">No Civic Complaints Reported Yet</h3>
-            <p className="text-xs text-charcoal-muted leading-relaxed">
-              CivicTrace is connected to your persistent database. Be the first citizen to report an infrastructure defect in your ward.
-            </p>
-          </div>
-          <button
-            onClick={onOpenReportModal}
-            className="px-5 py-2.5 bg-forest hover:bg-forest-hover text-softwhite rounded-xl font-bold text-xs shadow-card transition-all"
-          >
-            File First Complaint
-          </button>
+        <div className="text-center py-12 bg-softwhite rounded-3xl border border-sage p-6">
+          <p className="text-xs text-charcoal-muted">No grievances reported yet.</p>
         </div>
       )}
     </section>
