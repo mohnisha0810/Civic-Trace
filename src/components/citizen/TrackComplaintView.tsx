@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Complaint, ComplaintStatus, ComplaintHistoryEntry } from '../../types';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
 import { calculateResolutionEstimate, ResolutionEstimate } from '../../lib/resolutionEstimates';
+import { LiveMapSection } from '../home/LiveMapSection';
 
 // -----------------------------------------------------------------------------
 // DELIVERY-STYLE 6-STAGE DEFINITION
@@ -434,6 +435,7 @@ export const TrackComplaintView: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState(selectedComplaintId || '');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'resolved'>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [detailModalComplaint, setDetailModalComplaint] = useState<Complaint | null>(null);
   const [activeProofView, setActiveProofView] = useState<'before' | 'after'>('after');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -549,6 +551,7 @@ export const TrackComplaintView: React.FC = () => {
           <span className="text-slate-400 text-[11px] font-semibold">Quick Demonstrations:</span>
           {[
             { id: 'CP-8492', label: 'CP-8492 (Pothole · In Progress)' },
+            { id: 'CT-1004', label: 'CT-1004 (Punjab Pothole · In Progress)' },
             { id: 'CP-3884', label: 'CP-3884 (Streetlight · Verified Closed)' },
             { id: 'CT-1001', label: 'CT-1001 (Drainage · Awaiting Audit)' },
             { id: 'CT-1002', label: 'CT-1002 (Waste · Assigned)' },
@@ -565,14 +568,56 @@ export const TrackComplaintView: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* View Mode Switcher: List vs Map */}
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-white text-navy shadow-xs'
+                  : 'text-slate-600 hover:text-navy'
+              }`}
+            >
+              📋 Grievance List ({filteredComplaints.length})
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-navy'
+              }`}
+            >
+              <MapPin size={13} />
+              <span>🗺️ Interactive Map (All States)</span>
+            </button>
+          </div>
+
+          <span className="text-[11px] font-semibold text-slate-400 hidden sm:inline">
+            Interactive GIS coverage for all 28 Indian States & 8 Union Territories
+          </span>
+        </div>
       </section>
 
       {/* =======================================================================
-          SPOTLIGHT SECTION: FULL DELIVERY TRACKING EXPERIENCE
-          Shown when a specific complaint is selected or searched directly
+          INTERACTIVE MAP VIEW IN TRACK COMPLAINTS
          ======================================================================= */}
-      {spotlightComplaint && (
-        <section className="bg-white rounded-3xl border-2 border-teal-600/30 p-6 sm:p-8 shadow-lg space-y-6 animate-fadeIn">
+      {viewMode === 'map' && (
+        <section className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden animate-fadeIn">
+          <LiveMapSection />
+        </section>
+      )}
+
+      {/* =======================================================================
+          LIST VIEW: SPOTLIGHT & COMPLAINTS GRID
+         ======================================================================= */}
+      {viewMode === 'list' && (
+        <>
+          {/* SPOTLIGHT SECTION: FULL DELIVERY TRACKING EXPERIENCE */}
+          {spotlightComplaint && (
+            <section className="bg-white rounded-3xl border-2 border-teal-600/30 p-6 sm:p-8 shadow-lg space-y-6 animate-fadeIn">
           {/* Spotlight Header: Complaint ID, Copy Button, Status & Map Action */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
@@ -614,12 +659,12 @@ export const TrackComplaintView: React.FC = () => {
               <button
                 onClick={() => {
                   setSelectedComplaintId(spotlightComplaint.id);
-                  setActiveTab('map');
+                  setViewMode('map');
                 }}
                 className="px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
               >
                 <MapPin size={15} className="text-teal-700" />
-                <span>View on Neighbourhood Map</span>
+                <span>View on Interactive Map</span>
               </button>
             </div>
           </div>
@@ -946,6 +991,8 @@ export const TrackComplaintView: React.FC = () => {
           </div>
         )}
       </section>
+      </>
+      )}
 
       {/* =======================================================================
           COMPREHENSIVE COMPLAINT AUDIT MODAL (Before / After Evidence)
@@ -1056,7 +1103,7 @@ export const TrackComplaintView: React.FC = () => {
                 onClick={() => {
                   setSelectedComplaintId(detailModalComplaint.id);
                   setDetailModalComplaint(null);
-                  setActiveTab('map');
+                  setViewMode('map');
                 }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >

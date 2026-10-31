@@ -385,6 +385,88 @@ test('6.5 Generates deterministic tamper-evident cryptographic audit digest', ()
   assert.notStrictEqual(d1, d3);
 });
 
+// 7. INDIAN STATES & UNION TERRITORIES GEOSPATIAL COVERAGE
+console.log('\n▶ [7. INDIAN STATES & UT GEOSPATIAL COVERAGE]');
+
+test('7.1 Covers all 28 states and 8 union territories', () => {
+  const { ALL_INDIAN_STATES, INDIA_STATES_GEO_DATA, getStateGeoData } = require('../src/lib/indiaGeoService');
+  assert.strictEqual(ALL_INDIAN_STATES.length, 36);
+  assert.strictEqual(Object.keys(INDIA_STATES_GEO_DATA).length, 36);
+
+  const punjab = getStateGeoData('Punjab');
+  assert.ok(punjab, 'Punjab must exist in geo dataset');
+  assert.strictEqual(punjab.zoom, 8);
+});
+
+test('7.2 Punjab coordinates are valid and within northern India bounds', () => {
+  const { getStateGeoData } = require('../src/lib/indiaGeoService');
+  const punjab = getStateGeoData('Punjab');
+  assert.ok(punjab);
+  assert.ok(punjab.center[0] >= 29.5 && punjab.center[0] <= 32.5, 'Punjab latitude in range');
+  assert.ok(punjab.center[1] >= 73.8 && punjab.center[1] <= 76.9, 'Punjab longitude in range');
+});
+
+test('7.3 Validates coordinates for multiple states and union territories', () => {
+  const { getStateGeoData } = require('../src/lib/indiaGeoService');
+  const statesToTest = ['Rajasthan', 'Haryana', 'Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Chandigarh', 'Ladakh'];
+  for (const st of statesToTest) {
+    const data = getStateGeoData(st);
+    assert.ok(data, `${st} must resolve to valid geo coordinates`);
+    assert.strictEqual(data.center.length, 2);
+    assert.strictEqual(data.bounds.length, 2);
+  }
+});
+
+// 8. BILINGUAL AI CIVIC INTENT & CATEGORY CLASSIFIER
+console.log('\n▶ [8. BILINGUAL AI CIVIC INTENT CLASSIFIER]');
+
+test('8.1 Classifies pothole & road damage in English and Hindi', () => {
+  const { classifyCivicDescription } = require('../src/lib/civicNlpClassifier');
+  const enRes = classifyCivicDescription('Huge pothole on middle lane creating hazard for bikes');
+  assert.strictEqual(enRes.category, 'road_damage');
+  assert.ok(enRes.confidencePercent >= 70);
+
+  const hiRes = classifyCivicDescription('Sadak par bahut bada khadda hai aur rasta kharab hai');
+  assert.strictEqual(hiRes.category, 'road_damage');
+  assert.ok(hiRes.confidencePercent >= 70);
+});
+
+test('8.2 Classifies garbage & waste accumulation in English and Hindi', () => {
+  const { classifyCivicDescription } = require('../src/lib/civicNlpClassifier');
+  const enRes = classifyCivicDescription('Overflowing garbage dump and rotting plastic waste');
+  assert.strictEqual(enRes.category, 'garbage_waste');
+  assert.ok(enRes.confidencePercent >= 70);
+
+  const hiRes = classifyCivicDescription('Kachre ka dher pada hai aur badboo aa rahi hai safai chahiye');
+  assert.strictEqual(hiRes.category, 'garbage_waste');
+  assert.ok(hiRes.confidencePercent >= 70);
+});
+
+test('8.3 Classifies drainage, water supply, and streetlight civic issues', () => {
+  const { classifyCivicDescription } = require('../src/lib/civicNlpClassifier');
+  const drainRes = classifyCivicDescription('Blocked sewage drain overflowing foul black water onto road');
+  assert.strictEqual(drainRes.category, 'drainage_sewage');
+
+  const waterRes = classifyCivicDescription('Main potable drinking water pipeline ruptured and gushing');
+  assert.strictEqual(waterRes.category, 'water_supply');
+
+  const lightRes = classifyCivicDescription('Streetlight bulb fused road is pitch dark at night');
+  assert.strictEqual(lightRes.category, 'streetlight_electrical');
+
+  const hiLightRes = classifyCivicDescription('Khambe ki batti kharab hai andhera rehta hai');
+  assert.strictEqual(hiLightRes.category, 'streetlight_electrical');
+});
+
+test('8.4 Correctly flags vague descriptions as unclear and asks clarifying question', () => {
+  const { classifyCivicDescription } = require('../src/lib/civicNlpClassifier');
+  const vague1 = classifyCivicDescription('please help');
+  assert.strictEqual(vague1.isUnclear, true);
+  assert.ok(vague1.clarifyingQuestion);
+
+  const vague2 = classifyCivicDescription('problem here');
+  assert.strictEqual(vague2.isUnclear, true);
+});
+
 // SUMMARY
 console.log('\n======================================================');
 console.log(` RESULTS: ${passed} passed, ${failed} failed (${passed + failed} total tests)`);

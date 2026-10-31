@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { Complaint, ComplaintCategory, ComplaintStatus } from '../../types';
-import { ALL_INDIAN_STATES } from '../../lib/indiaGeoService';
+import { ALL_INDIAN_STATES, getStateGeoData } from '../../lib/indiaGeoService';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
 import { calculateResolutionEstimate, ResolutionEstimate } from '../../lib/resolutionEstimates';
 
@@ -67,6 +67,13 @@ export const LiveMapSection: React.FC = () => {
 
     return true;
   });
+
+  const districtCounts = filteredComplaints.reduce<Record<string, number>>((acc, c) => {
+    if (c.district) {
+      acc[c.district] = (acc[c.district] || 0) + 1;
+    }
+    return acc;
+  }, {});
 
   // Keep active pin synced if current active complaint is filtered out
   useEffect(() => {
@@ -168,12 +175,21 @@ export const LiveMapSection: React.FC = () => {
       marker.addTo(layer);
     });
 
-    // Auto-center on points
-    if (filteredComplaints.length > 0 && mapInstanceRef.current) {
-      const bounds = L.latLngBounds(filteredComplaints.map((c) => [c.latitude, c.longitude]));
-      mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    // Auto-center or fit bounds based on selection
+    if (mapInstanceRef.current) {
+      if (filteredComplaints.length > 0) {
+        const bounds = L.latLngBounds(filteredComplaints.map((c) => [c.latitude, c.longitude]));
+        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+      } else if (selectedState !== 'all') {
+        const stateGeo = getStateGeoData(selectedState);
+        if (stateGeo) {
+          mapInstanceRef.current.flyTo(stateGeo.center, stateGeo.zoom, { duration: 0.8 });
+        }
+      } else {
+        mapInstanceRef.current.flyTo([20.5937, 78.9629], 5, { duration: 0.8 });
+      }
     }
-  }, [filteredComplaints, activePinComplaint]);
+  }, [filteredComplaints, activePinComplaint, selectedState]);
 
   // Compute estimate for selected pin complaint
   const activeEstimate: ResolutionEstimate | null = activePinComplaint
@@ -268,9 +284,16 @@ export const LiveMapSection: React.FC = () => {
           <option value="resolved">Resolved / Verified</option>
         </select>
 
-        <span className="ml-auto text-[11px] font-mono font-bold text-slate-500">
-          Showing {filteredComplaints.length} Coordinates
-        </span>
+        <div className="ml-auto flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+          <span className="font-bold text-navy bg-slate-200/80 px-2.5 py-1 rounded-lg">
+            {selectedState !== 'all' ? selectedState : 'All India'}: {filteredComplaints.length} {filteredComplaints.length === 1 ? 'Complaint' : 'Complaints'}
+          </span>
+          {selectedState !== 'all' && Object.keys(districtCounts).length > 0 && (
+            <span className="text-slate-500 hidden sm:inline">
+              ({Object.entries(districtCounts).map(([d, n]) => `${d}: ${n}`).join(', ')})
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: Interactive Map + In-Place Detail Card */}
@@ -280,14 +303,13 @@ export const LiveMapSection: React.FC = () => {
           <div ref={mapContainerRef} className="w-full h-full" />
 
           {filteredComplaints.length === 0 && (
-            <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-2 z-20">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500">
-                <MapPin size={24} className="text-teal-600" />
-              </div>
-              <h3 className="text-sm font-bold text-navy">No Issues Match Filters</h3>
-              <p className="text-xs text-slate-500 max-w-sm">
-                Try selecting "All States" or clearing filters to view active civic incidents.
-              </p>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200 shadow-md text-xs font-semibold text-slate-700 flex items-center gap-2 max-w-[90%] text-center">
+              <MapPin size={15} className="text-teal-600 shrink-0" />
+              <span>
+                {selectedState !== 'all'
+                  ? `Showing ${selectedState} • No complaints currently recorded in this area`
+                  : 'No complaints match the selected filter combination'}
+              </span>
             </div>
           )}
         </div>
@@ -405,10 +427,17 @@ export const LiveMapSection: React.FC = () => {
                 </button>
               </motion.div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-400">
-                <MapPin size={28} className="text-teal-600" />
-                <p className="text-xs">
-                  Click any marker on the map to inspect its real-time operational status, contractor notes, and resolution estimate.
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center">
+                  <MapPin size={22} className="text-teal-700" />
+                </div>
+                <h4 className="text-sm font-black text-navy">
+                  {selectedState !== 'all' ? `No Complaints in ${selectedState}` : 'No Matching Incidents'}
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+                  {selectedState !== 'all'
+                    ? `There are currently 0 active civic complaints recorded for ${selectedState}. Map coordinates are active and will display markers as soon as complaints are filed.`
+                    : 'Select "All States" or adjust filters to view active complaints.'}
                 </p>
               </div>
             )}

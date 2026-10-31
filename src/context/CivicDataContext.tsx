@@ -227,6 +227,10 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     photoUrl: string;
     linkedChallengeId?: string;
   }): Complaint => {
+    if (!currentUser) {
+      throw new Error('Authentication required: Please sign in before reporting a civic grievance.');
+    }
+
     const nextNum = 1000 + complaints.length + 1;
     const newId = `CT-${nextNum}`;
     const nowIso = new Date().toISOString();
@@ -826,8 +830,11 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // COMMUNITY ACTION & CHALLENGE MANAGEMENT METHODS
   // ---------------------------------------------------------------------------
   const joinChallenge = (challengeId: string): boolean => {
-    const userId = currentUser ? currentUser.id : 'usr_guest_resident';
-    const userName = currentUser ? currentUser.name : 'Neighbourhood Resident';
+    if (!currentUser) {
+      throw new Error('Authentication required: Please sign in to join a community challenge.');
+    }
+    const userId = currentUser.id;
+    const userName = currentUser.name;
 
     const updated = updateChallengeRecord(challengeId, (prev) => {
       if (prev.participatingUserIds.includes(userId)) {
@@ -865,7 +872,8 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const leaveChallenge = (challengeId: string): boolean => {
-    const userId = currentUser ? currentUser.id : 'usr_guest_resident';
+    if (!currentUser) return false;
+    const userId = currentUser.id;
     const updated = updateChallengeRecord(challengeId, (prev) => {
       const nextParticipants = prev.participatingUserIds.filter((id) => id !== userId);
       const updatedCh = {
@@ -887,8 +895,11 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const registerForVolunteerActivity = (challengeId: string, activityId: string): boolean => {
-    const userId = currentUser ? currentUser.id : 'usr_guest_volunteer';
-    const userName = currentUser ? currentUser.name : 'Community Volunteer';
+    if (!currentUser) {
+      throw new Error('Authentication required: Please sign in to register as a volunteer.');
+    }
+    const userId = currentUser.id;
+    const userName = currentUser.name;
 
     const updated = updateChallengeRecord(challengeId, (prev) => {
       const actIndex = prev.volunteerActivities.findIndex((a) => a.id === activityId);

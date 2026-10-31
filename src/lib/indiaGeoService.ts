@@ -448,6 +448,212 @@ export const ALL_INDIAN_STATES: string[] = [
   'Puducherry',
 ];
 
+export interface StateGeoInfo {
+  center: [number, number];
+  zoom: number;
+  bounds: [[number, number], [number, number]];
+  isUnionTerritory?: boolean;
+}
+
+export const INDIA_STATES_GEO_DATA: Record<string, StateGeoInfo> = {
+  'Punjab': {
+    center: [31.1471, 75.3412],
+    zoom: 8,
+    bounds: [[29.5, 73.8], [32.5, 76.9]],
+  },
+  'Rajasthan': {
+    center: [27.0238, 74.2179],
+    zoom: 7,
+    bounds: [[23.0, 69.5], [30.2, 78.3]],
+  },
+  'Haryana': {
+    center: [29.0588, 76.0856],
+    zoom: 8,
+    bounds: [[27.6, 74.4], [30.9, 77.6]],
+  },
+  'Delhi': {
+    center: [28.7041, 77.1025],
+    zoom: 11,
+    bounds: [[28.4, 76.8], [28.9, 77.4]],
+    isUnionTerritory: true,
+  },
+  'Maharashtra': {
+    center: [19.7515, 75.7139],
+    zoom: 7,
+    bounds: [[15.6, 72.6], [22.0, 80.9]],
+  },
+  'Karnataka': {
+    center: [15.3173, 75.7139],
+    zoom: 7,
+    bounds: [[11.5, 74.0], [18.5, 78.6]],
+  },
+  'Tamil Nadu': {
+    center: [11.1271, 78.6569],
+    zoom: 7,
+    bounds: [[8.0, 76.2], [13.5, 80.4]],
+  },
+  'Kerala': {
+    center: [10.8505, 76.2711],
+    zoom: 8,
+    bounds: [[8.2, 74.8], [12.8, 77.5]],
+  },
+  'Uttar Pradesh': {
+    center: [26.8467, 80.9462],
+    zoom: 7,
+    bounds: [[23.8, 77.0], [30.4, 84.7]],
+  },
+  'Gujarat': {
+    center: [22.2587, 71.1924],
+    zoom: 7,
+    bounds: [[20.1, 68.1], [24.7, 74.5]],
+  },
+  'West Bengal': {
+    center: [22.9868, 87.8550],
+    zoom: 7,
+    bounds: [[21.5, 85.8], [27.2, 89.9]],
+  },
+  'Bihar': {
+    center: [25.0961, 85.3131],
+    zoom: 7,
+    bounds: [[24.2, 83.3], [27.5, 88.3]],
+  },
+  'Madhya Pradesh': {
+    center: [22.9734, 78.6569],
+    zoom: 7,
+    bounds: [[21.1, 74.0], [26.9, 82.8]],
+  },
+  'Andhra Pradesh': {
+    center: [15.9129, 79.7400],
+    zoom: 7,
+    bounds: [[12.6, 76.7], [19.2, 84.8]],
+  },
+  'Telangana': {
+    center: [18.1124, 79.0193],
+    zoom: 7,
+    bounds: [[15.8, 77.2], [19.9, 81.3]],
+  },
+  'Odisha': {
+    center: [20.9517, 85.0985],
+    zoom: 7,
+    bounds: [[17.8, 81.3], [22.6, 87.5]],
+  },
+  'Assam': {
+    center: [26.2006, 92.9376],
+    zoom: 7,
+    bounds: [[24.1, 89.7], [28.0, 96.0]],
+  },
+  'Jharkhand': {
+    center: [23.6102, 85.2799],
+    zoom: 8,
+    bounds: [[21.9, 83.3], [25.3, 87.9]],
+  },
+  'Chhattisgarh': {
+    center: [21.2787, 81.8661],
+    zoom: 7,
+    bounds: [[17.8, 80.2], [24.1, 84.4]],
+  },
+  'Himachal Pradesh': {
+    center: [31.1048, 77.1734],
+    zoom: 8,
+    bounds: [[30.4, 75.6], [33.3, 79.0]],
+  },
+  'Uttarakhand': {
+    center: [30.0668, 79.0193],
+    zoom: 8,
+    bounds: [[28.7, 77.6], [31.5, 81.0]],
+  },
+  'Goa': {
+    center: [15.2993, 74.1240],
+    zoom: 10,
+    bounds: [[14.9, 73.7], [15.8, 74.4]],
+  },
+  'Tripura': {
+    center: [23.9408, 91.9882],
+    zoom: 9,
+    bounds: [[22.9, 91.1], [24.5, 92.4]],
+  },
+  'Meghalaya': {
+    center: [25.4670, 91.3662],
+    zoom: 8,
+    bounds: [[25.0, 89.8], [26.1, 92.8]],
+  },
+  'Manipur': {
+    center: [24.6637, 93.9063],
+    zoom: 8,
+    bounds: [[23.8, 93.0], [25.7, 94.8]],
+  },
+  'Nagaland': {
+    center: [26.1584, 94.5624],
+    zoom: 8,
+    bounds: [[25.2, 93.3], [27.0, 95.3]],
+  },
+  'Mizoram': {
+    center: [23.1645, 92.9376],
+    zoom: 8,
+    bounds: [[21.9, 92.2], [24.5, 93.5]],
+  },
+  'Arunachal Pradesh': {
+    center: [28.2180, 94.7278],
+    zoom: 7,
+    bounds: [[26.6, 91.5], [29.5, 97.4]],
+  },
+  'Sikkim': {
+    center: [27.5330, 88.5122],
+    zoom: 9,
+    bounds: [[27.0, 88.0], [28.1, 88.9]],
+  },
+  'Chandigarh': {
+    center: [30.7333, 76.7794],
+    zoom: 12,
+    bounds: [[30.65, 76.68], [30.82, 76.86]],
+    isUnionTerritory: true,
+  },
+  'Jammu & Kashmir': {
+    center: [33.7782, 76.5762],
+    zoom: 7,
+    bounds: [[32.2, 73.8], [35.5, 77.8]],
+    isUnionTerritory: true,
+  },
+  'Ladakh': {
+    center: [34.1526, 77.5771],
+    zoom: 7,
+    bounds: [[32.3, 75.5], [36.0, 80.5]],
+    isUnionTerritory: true,
+  },
+  'Puducherry': {
+    center: [11.9416, 79.8083],
+    zoom: 11,
+    bounds: [[11.8, 79.6], [12.1, 80.0]],
+    isUnionTerritory: true,
+  },
+  'Andaman and Nicobar Islands': {
+    center: [11.7401, 92.6586],
+    zoom: 7,
+    bounds: [[6.7, 92.2], [13.7, 94.3]],
+    isUnionTerritory: true,
+  },
+  'Dadra and Nagar Haveli and Daman and Diu': {
+    center: [20.4283, 72.8397],
+    zoom: 10,
+    bounds: [[20.0, 72.6], [20.8, 73.2]],
+    isUnionTerritory: true,
+  },
+  'Lakshadweep': {
+    center: [10.5667, 72.6417],
+    zoom: 9,
+    bounds: [[8.0, 71.5], [12.5, 74.0]],
+    isUnionTerritory: true,
+  },
+};
+
+export function getStateGeoData(stateName: string): StateGeoInfo | null {
+  if (!stateName || stateName === 'all') return null;
+  const match = Object.keys(INDIA_STATES_GEO_DATA).find(
+    (key) => key.toLowerCase() === stateName.trim().toLowerCase()
+  );
+  return match ? INDIA_STATES_GEO_DATA[match] : null;
+}
+
 /**
  * Searches Indian geographic locations.
  * Queries live OpenStreetMap Nominatim with `countrycodes=in` when online,

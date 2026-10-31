@@ -20,6 +20,8 @@ import { useCivicData } from '../../context/CivicDataContext';
 import { ComplaintCategory, Complaint } from '../../types';
 import { reverseGeocodeIndia } from '../../lib/indiaGeoService';
 import { classifyCivicImage, CATEGORY_LABELS } from '../../lib/imageClassifier';
+import { classifyCivicDescription, TextClassificationResult } from '../../lib/civicNlpClassifier';
+import { ALL_INDIAN_STATES, getStateGeoData } from '../../lib/indiaGeoService';
 import { optimizeAndSanitizeImage, OptimizedImageResult } from '../../lib/imageOptimization';
 import { persistComplaintToIndexedDb } from '../../lib/indexedDbStorage';
 
@@ -71,6 +73,8 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
   // 3. Category & Description
   const [category, setCategory] = useState<ComplaintCategory>('road_damage');
   const [optionalDetail, setOptionalDetail] = useState<string>('');
+  const [nlpResult, setNlpResult] = useState<TextClassificationResult | null>(null);
+  const [userOverrodeCategory, setUserOverrodeCategory] = useState<boolean>(false);
 
   // 4. Submission & Signature Transformation State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -96,6 +100,8 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
       setShowManualLocation(false);
       setCategory('road_damage');
       setOptionalDetail('');
+      setNlpResult(null);
+      setUserOverrodeCategory(false);
       setIsSubmitting(false);
       setSubmitError(null);
       setCreatedComplaint(null);
@@ -214,9 +220,10 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
       return;
     }
 
-    const effectiveLat = latitude !== null ? latitude : 28.6139;
-    const effectiveLng = longitude !== null ? longitude : 77.2090;
-    const effectiveAddress = address.trim() || 'Central Civic Zone, India';
+    const stateGeo = getStateGeoData(stateName);
+    const effectiveLat = latitude !== null ? latitude : (stateGeo ? stateGeo.center[0] : 28.6139);
+    const effectiveLng = longitude !== null ? longitude : (stateGeo ? stateGeo.center[1] : 77.2090);
+    const effectiveAddress = address.trim() || `${districtName}, ${stateName}`;
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -630,28 +637,113 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
 
                 {/* Manual fallback input */}
                 {showManualLocation && (
-                  <div className="pt-1">
-                    <input
-                      type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="Enter street, landmark, or ward name"
-                      className="w-full px-3 py-2 bg-softwhite rounded-xl border border-sage text-xs text-charcoal focus:outline-none focus:border-forest"
-                    />
+                  <div className="pt-2 space-y-2 border-t border-slate-100">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">State</label>
+                        <select
+                          value={stateName}
+                          onChange={(e) => setStateName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-softwhite rounded-lg border border-sage text-xs text-charcoal font-medium"
+                        >
+                          {ALL_INDIAN_STATES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">District / City</label>
+                        <input
+                          type="text"
+                          value={districtName}
+                          onChange={(e) => setDistrictName(e.target.value)}
+                          placeholder="e.g. Ludhiana, Patiala, Delhi"
+                          className="w-full px-2.5 py-1.5 bg-softwhite rounded-lg border border-sage text-xs text-charcoal font-medium"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-0.5">Street / Locality</label>
+                      <input
+                        type="text"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Enter street, landmark, or ward name"
+                        className="w-full px-3 py-2 bg-softwhite rounded-xl border border-sage text-xs text-charcoal focus:outline-none focus:border-forest"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* STEP 3: ISSUE CATEGORY SELECTOR */}
+            {/* STEP 3: DESCRIBE THE PROBLEM (WITH BILINGUAL AI CATEGORY DETECTION) */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-forest flex items-center justify-between">
-                <span>Issue Category</span>
-                {detectedCategoryLabel && (
-                  <span className="text-[10px] font-normal text-charcoal-muted">
-                    Auto-selected from image inspection
-                  </span>
-                )}
+                <span>Describe the Issue *</span>
+                <span className="text-[10px] font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                  ✨ AI Classification Active
+                </span>
+              </label>
+              <textarea
+                rows={2}
+                required
+                value={optionalDetail}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setOptionalDetail(val);
+                  if (val.trim().length >= 4) {
+                    const res = classifyCivicDescription(val);
+                    setNlpResult(res);
+                    if (!userOverrodeCategory && !res.isUnclear && res.category !== 'other') {
+                      setCategory(res.category);
+                    }
+                  } else {
+                    setNlpResult(null);
+                  }
+                }}
+                placeholder="Describe in English or Hindi (e.g. Broken road with deep pothole / sadak par kachra aur ganda paani hai)..."
+                className="w-full px-3.5 py-2.5 bg-ivory rounded-xl border border-sage text-xs text-charcoal focus:outline-none focus:border-forest transition-colors font-medium"
+              />
+
+              {/* AI Classification Feedback Badge */}
+              {nlpResult && (
+                <div
+                  className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1 animate-in fade-in ${
+                    nlpResult.isUnclear
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-teal-50 border-teal-200 text-teal-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-teal-700 shrink-0" />
+                      <span>AI Suggested Category: {nlpResult.categoryLabel}</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-teal-200 text-teal-800">
+                      {nlpResult.confidencePercent}% Confidence
+                    </span>
+                  </div>
+                  {nlpResult.isUnclear ? (
+                    <p className="text-[11px] text-amber-800">
+                      {nlpResult.clarifyingQuestion}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-teal-700 opacity-90">
+                      {nlpResult.explanation} (Select another category below if needed)
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* STEP 4: ISSUE CATEGORY SELECTOR & REVIEW */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-forest flex items-center justify-between">
+                <span>Select / Review Category</span>
+                <span className="text-[10px] text-charcoal-muted">Click to override</span>
               </label>
 
               <div className="grid grid-cols-2 gap-2">
@@ -661,8 +753,11 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
                     <button
                       key={cat.id}
                       type="button"
-                      onClick={() => setCategory(cat.id)}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl text-left border text-xs font-semibold transition-all duration-150 ${
+                      onClick={() => {
+                        setCategory(cat.id);
+                        setUserOverrodeCategory(true);
+                      }}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl text-left border text-xs font-semibold transition-all duration-150 cursor-pointer ${
                         isSelected
                           ? 'bg-forest text-softwhite border-forest shadow-xs scale-[1.01]'
                           : 'bg-ivory hover:bg-sage/40 text-charcoal border-sage'
@@ -674,20 +769,6 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
                   );
                 })}
               </div>
-            </div>
-
-            {/* STEP 4: OPTIONAL SHORT NOTE */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-forest">
-                Additional Note <span className="font-normal text-charcoal-muted">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={optionalDetail}
-                onChange={(e) => setOptionalDetail(e.target.value)}
-                placeholder="e.g. Near bus stop, dangerous after sunset"
-                className="w-full px-3.5 py-2.5 bg-ivory rounded-xl border border-sage text-xs text-charcoal focus:outline-none focus:border-forest transition-colors"
-              />
             </div>
 
             {/* Error Message Display */}

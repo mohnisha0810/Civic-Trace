@@ -22,8 +22,9 @@ import { CitizenProfileView } from './components/citizen/CitizenProfileView';
 import { OfficialDashboard } from './components/official/OfficialDashboard';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 
-// Auth Modal
+// Auth Modal & Dedicated Mandatory Sign-In Page
 import { AuthModal } from './components/auth/AuthModal';
+import { SignInPage } from './components/auth/SignInPage';
 
 // Optional Cinematic Preview (Preserved for development/preview testing via ?preview=cinematic)
 import { CinematicLandingPage } from './components/cinematic/CinematicLandingPage';
@@ -33,7 +34,7 @@ import { useAuth } from './context/AuthContext';
 
 export const AppContent: React.FC = () => {
   const { activeTab, setActiveTab } = useCivicData();
-  const { isAuthenticated, currentUser } = useAuth();
+  const { isAuthenticated, currentUser, isLoading } = useAuth();
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -59,7 +60,22 @@ export const AppContent: React.FC = () => {
     );
   }
 
-  // 2. PRODUCTION WEBSITE: Pure CivicTrace experience without any cinematic world animation
+  // 2. LOADING STATE: Restoring persistent session
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] text-navy font-sans space-y-3">
+        <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-teal-900 tracking-wide">Initializing CivicTrace Session...</p>
+      </div>
+    );
+  }
+
+  // 3. MANDATORY AUTHENTICATION: First screen is sign-in if unauthenticated
+  if (!isAuthenticated) {
+    return <SignInPage />;
+  }
+
+  // 4. PRODUCTION WEBSITE: Authenticated CivicTrace Experience
   return (
     <div className="min-h-screen flex flex-col bg-[#FDFBF7] font-sans text-navy relative">
       {/* Living Animated Background Canvas */}

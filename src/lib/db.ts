@@ -206,6 +206,19 @@ export function getAllComplaints(): Complaint[] {
       saveAllComplaints(seeds);
       return seeds;
     }
+    // Ensure any new official seed complaints (such as Punjab CT-1004) are merged
+    const seeds = getInitialSeedComplaints();
+    const existingIds = new Set(parsed.map((c: any) => c.id));
+    let hasNewSeeds = false;
+    for (const seed of seeds) {
+      if (!existingIds.has(seed.id)) {
+        parsed.push(seed);
+        hasNewSeeds = true;
+      }
+    }
+    if (hasNewSeeds) {
+      saveAllComplaints(parsed);
+    }
     return parsed;
   } catch {
     return getInitialSeedComplaints();
