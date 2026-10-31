@@ -25,11 +25,13 @@ const DB_AUDIT_LOGS_KEY = 'civictrace_db_audit_logs_v4';
 const DB_NOTIFICATIONS_KEY = 'civictrace_db_notifications_v4';
 
 // -----------------------------------------------------------------------------
-// DEFAULT SUPER ADMIN PROVISIONING
+// DEFAULT USERS & DEMO PROVISIONING
 // -----------------------------------------------------------------------------
-function ensureSuperAdminProvisioned(users: User[]): User[] {
-  const hasAdmin = users.some(u => u.role === 'super_admin');
-  if (!hasAdmin) {
+function ensureDefaultUsersProvisioned(users: User[]): User[] {
+  let changed = false;
+
+  // Master Super Admin
+  if (!users.some(u => u.role === 'super_admin')) {
     const salt = 'c1v1ctr4c3_s4lt_adm1n_2026';
     const passwordHash = hashPassword('AdminCivicTrace2026!', salt);
 
@@ -48,20 +50,72 @@ function ensureSuperAdminProvisioned(users: User[]): User[] {
       bio: 'Authorized National Platform Administrator for CivicTrace Operations.',
     };
     users.push(masterAdmin);
-    saveAllUsers(users);
+    changed = true;
+  }
 
-    // Initial audit log
-    addAuditLogEntry({
-      id: `audit_init_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actorId: masterAdmin.id,
-      actorName: masterAdmin.name,
-      actorRole: 'super_admin',
-      actionType: 'user_status_changed',
-      targetId: masterAdmin.id,
-      targetType: 'user',
-      details: 'Master Super Admin Directorate provisioned for national grievance oversight.',
-    });
+  // Citizen Demo: Priya Sundaram
+  if (!users.some(u => u.identifier.toLowerCase() === 'priya.sundaram@gmail.com' || u.id === 'usr_citizen_priya')) {
+    const salt = 'c1v1ctr4c3_s4lt_priya_2026';
+    const passwordHash = hashPassword('Citizen123!', salt);
+
+    const priyaUser: User = {
+      id: 'usr_citizen_priya',
+      name: 'Priya Sundaram',
+      identifier: 'priya.sundaram@gmail.com',
+      identifierType: 'email',
+      phone: '+91 98450 12345',
+      passwordHash,
+      salt,
+      role: 'citizen',
+      ward: 'Ward 151 - Koramangala',
+      createdAt: new Date().toISOString(),
+      isVerified: true,
+      bio: 'Active Koramangala Resident & Ward Volunteer.',
+    };
+    users.push(priyaUser);
+    changed = true;
+  }
+
+  // Official Demo: Er. Anand Verma (AEE BBMP)
+  if (!users.some(u => u.identifier.toLowerCase() === 'anand.verma@bbmp.gov.in' || u.id === 'usr_official_anand')) {
+    const salt = 'c1v1ctr4c3_s4lt_anand_2026';
+    const passwordHash = hashPassword('GovAdmin2026!', salt);
+
+    const anandOfficial: User = {
+      id: 'usr_official_anand',
+      name: 'Er. Anand Verma',
+      identifier: 'anand.verma@bbmp.gov.in',
+      identifierType: 'email',
+      phone: '+91 80 2222 1111',
+      passwordHash,
+      salt,
+      role: 'government',
+      department: 'Roads & Infrastructure Engineering',
+      ward: 'Zone South',
+      createdAt: new Date().toISOString(),
+      isVerified: true,
+      bio: 'Assistant Executive Engineer (AEE), BBMP Infrastructure Division.',
+      governmentProfile: {
+        organizationType: 'municipal_corporation',
+        organizationName: 'Bruhat Bengaluru Mahanagara Palike',
+        department: 'Roads & Infrastructure Engineering',
+        designation: 'Assistant Executive Engineer',
+        officialEmail: 'anand.verma@bbmp.gov.in',
+        officialPhone: '+91 80 2222 1111',
+        state: 'Karnataka',
+        district: 'Bengaluru Urban',
+        city: 'Bengaluru',
+        verificationStatus: 'approved',
+        reviewedAt: new Date().toISOString(),
+        reviewedByAdminId: 'usr_super_admin_master',
+      },
+    };
+    users.push(anandOfficial);
+    changed = true;
+  }
+
+  if (changed) {
+    saveAllUsers(users);
   }
   return users;
 }
@@ -73,7 +127,7 @@ export function getAllUsers(): User[] {
   try {
     const raw = localStorage.getItem(DB_USERS_KEY);
     const users: User[] = raw ? JSON.parse(raw) : [];
-    return ensureSuperAdminProvisioned(users);
+    return ensureDefaultUsersProvisioned(users);
   } catch {
     return [];
   }

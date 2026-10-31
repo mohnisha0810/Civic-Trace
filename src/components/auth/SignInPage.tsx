@@ -120,6 +120,8 @@ export const SignInPage: React.FC = () => {
     setRoleTab(role);
     setFormError(null);
     clearError();
+    // 1-Click Instant Demo Login
+    loginWithPassword(demoEmail, demoPass);
   };
 
   return (
