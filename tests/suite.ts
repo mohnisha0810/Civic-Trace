@@ -306,6 +306,85 @@ test('5.4 Priority-ordered complaints sort composite urgency correctly', () => {
   assert.strictEqual(sorted[2].id, 'CT-2');
 });
 
+// 6. SECURITY & THREAT MITIGATION TESTS
+console.log('\n▶ [6. SECURITY & THREAT MITIGATION ENGINE]');
+
+test('6.1 Sliding window rate limiter enforces maximum attempts and cooldown', () => {
+  const { checkRateLimit, resetRateLimit } = require('../src/lib/securityService');
+  const actionKey = 'test_ip_rate_limit_auth';
+  resetRateLimit(actionKey);
+
+  for (let i = 0; i < 5; i++) {
+    const res = checkRateLimit(actionKey, 5, 60000);
+    assert.strictEqual(res.allowed, true);
+  }
+
+  // 6th attempt within window must be rejected
+  const blockedRes = checkRateLimit(actionKey, 5, 60000);
+  assert.strictEqual(blockedRes.allowed, false);
+  assert(blockedRes.retryAfterSeconds > 0);
+
+  // Resetting clears the lock
+  resetRateLimit(actionKey);
+  const recoveredRes = checkRateLimit(actionKey, 5, 60000);
+  assert.strictEqual(recoveredRes.allowed, true);
+});
+
+test('6.2 Input sanitization strips malicious XSS script tags and event handlers', () => {
+  const { sanitizeTextInput } = require('../src/lib/securityService');
+  const dirty = '<script>alert("hacked")</script>Pothole on Main St<img src=x onerror=alert(1)>';
+  const clean = sanitizeTextInput(dirty);
+
+  assert(!clean.includes('<script>'));
+  assert(!clean.includes('onerror='));
+  assert.strictEqual(clean, 'Pothole on Main St');
+});
+
+test('6.3 Deny-by-default role authorization blocks citizens from government ops', () => {
+  const { canUserPerformGovernmentActions } = require('../src/lib/securityService');
+
+  const citizenUser = { id: 'usr_cit_1', role: 'citizen', name: 'Ravi', identifier: 'ravi@example.com' };
+  const officialUser = { id: 'usr_gov_1', role: 'government', name: 'Officer Sharma', identifier: 'sharma@gov.in' };
+  const adminUser = { id: 'usr_admin_1', role: 'super_admin', name: 'Admin', identifier: 'admin@gov.in' };
+
+  assert.strictEqual(canUserPerformGovernmentActions(null), false);
+  assert.strictEqual(canUserPerformGovernmentActions(citizenUser), false);
+  assert.strictEqual(canUserPerformGovernmentActions(officialUser), true);
+  assert.strictEqual(canUserPerformGovernmentActions(adminUser), true);
+});
+
+test('6.4 Private complaint details viewable only by reporter, assigned official, or super admin', () => {
+  const { canUserViewPrivateDetails } = require('../src/lib/securityService');
+
+  const mockComplaint = {
+    id: 'CT-999',
+    reportedByUserId: 'usr_cit_owner',
+    reportedByIdentifier: 'owner@example.com',
+  };
+
+  const owner = { id: 'usr_cit_owner', role: 'citizen', identifier: 'owner@example.com' };
+  const stranger = { id: 'usr_cit_stranger', role: 'citizen', identifier: 'stranger@example.com' };
+  const official = { id: 'usr_gov_1', role: 'government', identifier: 'official@gov.in' };
+  const superAdmin = { id: 'usr_adm_1', role: 'super_admin', identifier: 'admin@gov.in' };
+
+  assert.strictEqual(canUserViewPrivateDetails(null, mockComplaint as any), false);
+  assert.strictEqual(canUserViewPrivateDetails(owner as any, mockComplaint as any), true);
+  assert.strictEqual(canUserViewPrivateDetails(stranger as any, mockComplaint as any), false);
+  assert.strictEqual(canUserViewPrivateDetails(official as any, mockComplaint as any), true);
+  assert.strictEqual(canUserViewPrivateDetails(superAdmin as any, mockComplaint as any), true);
+});
+
+test('6.5 Generates deterministic tamper-evident cryptographic audit digest', () => {
+  const { generateAuditStateDigest } = require('../src/lib/securityService');
+  const d1 = generateAuditStateDigest('CT-1001', 'work_order_dispatched', 'usr_gov_1', '2026-10-31T09:00:00Z');
+  const d2 = generateAuditStateDigest('CT-1001', 'work_order_dispatched', 'usr_gov_1', '2026-10-31T09:00:00Z');
+  const d3 = generateAuditStateDigest('CT-1001', 'work_order_dispatched', 'usr_gov_2', '2026-10-31T09:00:00Z');
+
+  assert.strictEqual(d1.length, 64);
+  assert.strictEqual(d1, d2);
+  assert.notStrictEqual(d1, d3);
+});
+
 // SUMMARY
 console.log('\n======================================================');
 console.log(` RESULTS: ${passed} passed, ${failed} failed (${passed + failed} total tests)`);

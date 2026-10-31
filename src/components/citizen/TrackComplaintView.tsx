@@ -11,22 +11,373 @@ import {
   Sparkles,
   ChevronRight,
   X,
-  Filter,
   ShieldCheck,
   ExternalLink,
+  Copy,
+  Check,
+  ArrowRight,
+  HardHat,
+  FileCheck2,
+  Building2,
   Layers,
+  Calendar,
 } from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Complaint, ComplaintStatus } from '../../types';
+import { Complaint, ComplaintStatus, ComplaintHistoryEntry } from '../../types';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
+import { calculateResolutionEstimate, ResolutionEstimate } from '../../lib/resolutionEstimates';
 
-// Reusable 3-Stage Visual Complaint Status Journey Component
+// -----------------------------------------------------------------------------
+// DELIVERY-STYLE 6-STAGE DEFINITION
+// -----------------------------------------------------------------------------
+export interface DeliveryStageInfo {
+  number: number;
+  key: 'reported' | 'acknowledged' | 'assigned' | 'in_progress' | 'resolution_submitted' | 'verified_resolved';
+  label: string;
+  sublabel: string;
+  isCompleted: boolean;
+  isActive: boolean;
+  isPending: boolean;
+  timestamp?: string;
+  actorName?: string;
+  actorRole?: string;
+  details?: string;
+}
+
+export function getDeliveryStages(complaint: Complaint): DeliveryStageInfo[] {
+  // Determine current progression index (1 to 6)
+  let currentStageIndex = 1;
+
+  switch (complaint.status) {
+    case 'submitted':
+      currentStageIndex = 1;
+      break;
+    case 'verified_intake':
+      currentStageIndex = 2;
+      break;
+    case 'assigned':
+      currentStageIndex = 3;
+      break;
+    case 'in_progress':
+    case 'reopened':
+    case 'disputed':
+      currentStageIndex = 4;
+      break;
+    case 'resolved':
+    case 'awaiting_verification':
+      currentStageIndex = 5;
+      break;
+    case 'verified':
+      currentStageIndex = 6;
+      break;
+    default:
+      currentStageIndex = 1;
+  }
+
+  // Helper to extract matching history entry
+  const findHist = (stageKey: string) => {
+    return complaint.history.find((h) => {
+      if (stageKey === 'reported') return h.stage === 'reported';
+      if (stageKey === 'acknowledged') return h.stage === 'verified';
+      if (stageKey === 'assigned') return h.stage === 'assigned';
+      if (stageKey === 'in_progress') return h.stage === 'in_progress';
+      if (stageKey === 'resolution_submitted') return h.stage === 'resolved';
+      if (stageKey === 'verified_resolved') return h.stage === 'verified_resolution';
+      return false;
+    });
+  };
+
+  const hReported = findHist('reported');
+  const hAck = findHist('acknowledged');
+  const hAssigned = findHist('assigned');
+  const hProgress = findHist('in_progress');
+  const hResolved = findHist('resolution_submitted');
+  const hVerified = findHist('verified_resolved');
+
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return undefined;
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return undefined;
+    }
+  };
+
+  const stages: DeliveryStageInfo[] = [
+    {
+      number: 1,
+      key: 'reported',
+      label: 'Reported',
+      sublabel: 'Citizen Photo & GPS Submission',
+      isCompleted: currentStageIndex > 1,
+      isActive: currentStageIndex === 1,
+      isPending: currentStageIndex < 1,
+      timestamp: formatTime(hReported?.timestamp || complaint.createdAt),
+      actorName: hReported?.actorName || complaint.reportedByName || 'Citizen Reporter',
+      actorRole: 'Citizen Submitter',
+      details: hReported?.details || `Registered at ${complaint.address}. Initial EDPS score computed.`,
+    },
+    {
+      number: 2,
+      key: 'acknowledged',
+      label: 'Acknowledged',
+      sublabel: 'AI Triage & Jurisdiction Check',
+      isCompleted: currentStageIndex > 2,
+      isActive: currentStageIndex === 2,
+      isPending: currentStageIndex < 2,
+      timestamp: formatTime(hAck?.timestamp),
+      actorName: hAck?.actorName || 'CivicTrace AI Triage Engine',
+      actorRole: hAck?.actorRole || 'System Automated',
+      details: hAck?.details || 'Deduplication scan passed. Priority validated and mapped to municipal ward.',
+    },
+    {
+      number: 3,
+      key: 'assigned',
+      label: 'Assigned',
+      sublabel: 'Work Order Dispatched to Field Crew',
+      isCompleted: currentStageIndex > 3,
+      isActive: currentStageIndex === 3,
+      isPending: currentStageIndex < 3,
+      timestamp: formatTime(hAssigned?.timestamp || complaint.workOrder?.assignedAt),
+      actorName: hAssigned?.actorName || complaint.workOrder?.officialName || 'Municipal Authority',
+      actorRole: complaint.workOrder?.department || 'Department Dispatcher',
+      details:
+        hAssigned?.details ||
+        (complaint.workOrder
+          ? `Work order issued to ${complaint.workOrder.contractor} with target SLA of ${complaint.workOrder.slaHours}h.`
+          : 'Pending contractor allocation.'),
+    },
+    {
+      number: 4,
+      key: 'in_progress',
+      label: 'In Progress',
+      sublabel: 'Field Crew On-Site Repair',
+      isCompleted: currentStageIndex > 4,
+      isActive: currentStageIndex === 4,
+      isPending: currentStageIndex < 4,
+      timestamp: formatTime(hProgress?.timestamp),
+      actorName: hProgress?.actorName || complaint.workOrder?.crew || 'Field Maintenance Crew',
+      actorRole: 'Field Contractor',
+      details:
+        hProgress?.details ||
+        'Physical remediation work commenced at coordinates. Material compaction and site safety protocols active.',
+    },
+    {
+      number: 5,
+      key: 'resolution_submitted',
+      label: 'Resolution Submitted',
+      sublabel: 'Geofenced Photographic Evidence',
+      isCompleted: currentStageIndex > 5,
+      isActive: currentStageIndex === 5,
+      isPending: currentStageIndex < 5,
+      timestamp: formatTime(hResolved?.timestamp || complaint.resolutionProof?.completedAt),
+      actorName: hResolved?.actorName || complaint.resolutionProof?.contractorName || 'Assigned Contractor',
+      actorRole: 'Field Contractor',
+      details:
+        hResolved?.details ||
+        (complaint.resolutionProof
+          ? `After-repair photo uploaded. Geofence valid (${complaint.resolutionProof.geofenceDistanceMeters}m from site). Community verification gate active.`
+          : 'Awaiting completion proof upload.'),
+    },
+    {
+      number: 6,
+      key: 'verified_resolved',
+      label: 'Verified Resolved',
+      sublabel: 'Community Consensus Verified',
+      isCompleted: currentStageIndex === 6,
+      isActive: false,
+      isPending: currentStageIndex < 6,
+      timestamp: formatTime(hVerified?.timestamp),
+      actorName: hVerified?.actorName || 'Community Consensus Gate',
+      actorRole: 'Citizen Consensus Audit',
+      details:
+        hVerified?.details ||
+        'Dual-layer consensus audit completed. Issue officially verified and closed in public ledger.',
+    },
+  ];
+
+  return stages;
+}
+
+// -----------------------------------------------------------------------------
+// DELIVERY-STYLE PROGRESS STEPPER COMPONENT
+// -----------------------------------------------------------------------------
+export const DeliveryProgressPipeline: React.FC<{ complaint: Complaint }> = ({ complaint }) => {
+  const stages = getDeliveryStages(complaint);
+
+  return (
+    <div className="w-full py-4">
+      {/* Desktop / Tablet Horizontal Stepper */}
+      <div className="hidden md:block">
+        <div className="relative flex items-start justify-between">
+          {/* Background Connecting Bar */}
+          <div className="absolute top-5 left-8 right-8 h-1 bg-slate-200 z-0 rounded-full" />
+
+          {/* Active / Completed Connecting Bar */}
+          {(() => {
+            const completedCount = stages.filter((s) => s.isCompleted).length;
+            const activeIndex = stages.findIndex((s) => s.isActive);
+            let percent = 0;
+            if (completedCount === 6) percent = 100;
+            else if (activeIndex >= 0) percent = (activeIndex / 5) * 100;
+            else percent = (completedCount / 6) * 100;
+
+            return (
+              <div
+                className="absolute top-5 left-8 h-1 bg-teal-600 z-0 rounded-full transition-all duration-700 ease-out"
+                style={{ width: `calc(${percent}% - 2rem)` }}
+              />
+            );
+          })()}
+
+          {/* 6 Step Nodes */}
+          {stages.map((stage) => {
+            return (
+              <div
+                key={stage.key}
+                className="relative z-10 flex flex-col items-center text-center max-w-[120px]"
+              >
+                {/* Node Circle */}
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 shadow-sm ${
+                    stage.isCompleted
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-50'
+                      : stage.isActive
+                      ? 'bg-teal-600 text-white ring-4 ring-teal-100 animate-pulse'
+                      : 'bg-white border-2 border-slate-300 text-slate-400'
+                  }`}
+                >
+                  {stage.isCompleted ? (
+                    <Check size={18} className="stroke-[3]" />
+                  ) : stage.isActive ? (
+                    <Wrench size={16} className="animate-spin" />
+                  ) : (
+                    <span>{stage.number}</span>
+                  )}
+                </div>
+
+                {/* Stage Title */}
+                <span
+                  className={`mt-2.5 text-xs font-bold leading-tight ${
+                    stage.isActive
+                      ? 'text-teal-900 font-extrabold'
+                      : stage.isCompleted
+                      ? 'text-slate-800'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {stage.label}
+                </span>
+
+                {/* Active Indicator Pill */}
+                {stage.isActive && (
+                  <span className="mt-1 px-2 py-0.5 bg-teal-100 text-teal-800 text-[10px] font-extrabold rounded-full uppercase tracking-wider">
+                    Current Stage
+                  </span>
+                )}
+
+                {/* Timestamp */}
+                {stage.timestamp && (
+                  <span className="mt-1 text-[10px] font-medium text-slate-500">
+                    {stage.timestamp}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mobile Vertical Stepper (thumb-friendly for viewports < 768px) */}
+      <div className="md:hidden space-y-4">
+        {stages.map((stage, idx) => {
+          const isLast = idx === stages.length - 1;
+
+          return (
+            <div key={stage.key} className="relative flex items-start gap-3.5">
+              {/* Vertical Connecting Line */}
+              {!isLast && (
+                <div
+                  className={`absolute left-4 top-8 bottom-0 w-0.5 -ml-[1px] ${
+                    stage.isCompleted ? 'bg-teal-600' : 'bg-slate-200'
+                  }`}
+                />
+              )}
+
+              {/* Node Circle */}
+              <div
+                className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xs relative z-10 ${
+                  stage.isCompleted
+                    ? 'bg-emerald-600 text-white'
+                    : stage.isActive
+                    ? 'bg-teal-600 text-white ring-4 ring-teal-100 animate-pulse'
+                    : 'bg-white border-2 border-slate-300 text-slate-400'
+                }`}
+              >
+                {stage.isCompleted ? (
+                  <Check size={14} className="stroke-[3]" />
+                ) : stage.isActive ? (
+                  <Wrench size={13} className="animate-spin" />
+                ) : (
+                  <span>{stage.number}</span>
+                )}
+              </div>
+
+              {/* Stage Content */}
+              <div className="flex-1 pb-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-bold ${
+                        stage.isActive
+                          ? 'text-teal-900 font-extrabold'
+                          : stage.isCompleted
+                          ? 'text-slate-800'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {stage.label}
+                    </span>
+                    {stage.isActive && (
+                      <span className="px-1.5 py-0.2 bg-teal-100 text-teal-800 text-[9px] font-extrabold rounded uppercase">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  {stage.timestamp && (
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {stage.timestamp}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500 mt-0.5">{stage.sublabel}</p>
+                {stage.actorName && (
+                  <p className="text-[10px] text-slate-600 mt-0.5 font-medium">
+                    By: {stage.actorName} ({stage.actorRole})
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Reusable compact 3-stage status journey for cards
 export const ComplaintStatusJourney: React.FC<{ status: ComplaintStatus; isCompact?: boolean }> = ({
   status,
   isCompact = false,
 }) => {
-  // Map database status to 3 canonical stages
   let activeStage: 1 | 2 | 3 = 1;
   if (status === 'resolved' || status === 'awaiting_verification' || status === 'verified') {
     activeStage = 3;
@@ -41,141 +392,42 @@ export const ComplaintStatusJourney: React.FC<{ status: ComplaintStatus; isCompa
     activeStage = 1;
   }
 
-  const progressPercent = activeStage === 1 ? '16%' : activeStage === 2 ? '50%' : '100%';
-
-  if (isCompact) {
-    return (
-      <div className="space-y-1.5 w-full">
-        {/* Progress track line */}
-        <div className="relative h-1.5 bg-sage/60 rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: progressPercent }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-            className={`h-full rounded-full ${
-              activeStage === 3
-                ? 'bg-emerald-600'
-                : activeStage === 2
-                ? 'bg-teal-700'
-                : 'bg-amber-500'
-            }`}
-          />
-        </div>
-        {/* Stage Labels */}
-        <div className="flex items-center justify-between text-[10px] font-semibold text-charcoal-muted">
-          <span className={activeStage >= 1 ? 'text-forest font-bold' : ''}>Intake</span>
-          <span className={activeStage >= 2 ? 'text-teal-800 font-bold' : ''}>In Progress</span>
-          <span className={activeStage === 3 ? 'text-emerald-700 font-bold' : ''}>Resolved</span>
-        </div>
-      </div>
-    );
-  }
+  const progressPercent = activeStage === 1 ? '20%' : activeStage === 2 ? '60%' : '100%';
 
   return (
-    <div className="bg-ivory rounded-2xl p-4 border border-sage space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal-muted">
-          Resolution Lifecycle
-        </span>
-        <span
-          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-            activeStage === 3
-              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-              : activeStage === 2
-              ? 'bg-teal-100 text-teal-800 border border-teal-300'
-              : 'bg-amber-100 text-amber-800 border border-amber-300'
-          }`}
-        >
-          {activeStage === 3
-            ? 'Verified Resolution'
-            : activeStage === 2
-            ? 'Active Field Crew'
-            : 'Pending Triage'}
-        </span>
-      </div>
-
-      {/* Visual Journey Track */}
-      <div className="relative pt-2 pb-1">
-        {/* Background track line */}
-        <div className="absolute top-5 left-4 right-4 h-1 bg-sage rounded-full z-0" />
-        {/* Active progress track */}
+    <div className="space-y-1.5 w-full">
+      <div className="relative h-1.5 bg-slate-100 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
-          animate={{
-            width: activeStage === 1 ? '10%' : activeStage === 2 ? '50%' : '100%',
-          }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className={`absolute top-5 left-4 h-1 rounded-full z-0 ${
-            activeStage === 3 ? 'bg-emerald-500' : activeStage === 2 ? 'bg-teal-600' : 'bg-amber-500'
+          animate={{ width: progressPercent }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className={`h-full rounded-full ${
+            activeStage === 3
+              ? 'bg-emerald-600'
+              : activeStage === 2
+              ? 'bg-teal-600'
+              : 'bg-amber-500'
           }`}
         />
-
-        {/* 3 Step Nodes */}
-        <div className="relative z-10 flex items-center justify-between">
-          {/* Stage 1: Reported */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                activeStage >= 1
-                  ? 'bg-forest text-softwhite shadow-xs'
-                  : 'bg-sage text-charcoal-muted'
-              }`}
-            >
-              1
-            </div>
-            <span className="text-[10px] font-bold text-forest">Reported</span>
-          </div>
-
-          {/* Stage 2: In Progress */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                activeStage >= 2
-                  ? 'bg-teal-700 text-softwhite shadow-xs'
-                  : 'bg-sage text-charcoal-muted'
-              }`}
-            >
-              {activeStage === 2 ? <Wrench size={13} className="animate-spin" /> : '2'}
-            </div>
-            <span
-              className={`text-[10px] font-bold ${
-                activeStage >= 2 ? 'text-teal-800' : 'text-charcoal-muted'
-              }`}
-            >
-              Field Action
-            </span>
-          </div>
-
-          {/* Stage 3: Resolved */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                activeStage === 3
-                  ? 'bg-emerald-600 text-softwhite shadow-xs ring-4 ring-emerald-100'
-                  : 'bg-sage text-charcoal-muted'
-              }`}
-            >
-              {activeStage === 3 ? <CheckCircle2 size={15} /> : '3'}
-            </div>
-            <span
-              className={`text-[10px] font-bold ${
-                activeStage === 3 ? 'text-emerald-700 font-extrabold' : 'text-charcoal-muted'
-              }`}
-            >
-              Resolved
-            </span>
-          </div>
-        </div>
+      </div>
+      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+        <span className={activeStage >= 1 ? 'text-navy font-bold' : ''}>1. Reported</span>
+        <span className={activeStage >= 2 ? 'text-teal-700 font-bold' : ''}>2. In Progress</span>
+        <span className={activeStage === 3 ? 'text-emerald-700 font-bold' : ''}>3. Verified</span>
       </div>
     </div>
   );
 };
 
+// -----------------------------------------------------------------------------
+// MAIN TRACK COMPLAINT VIEW
+// -----------------------------------------------------------------------------
 export const TrackComplaintView: React.FC = () => {
   const {
     complaints,
     selectedComplaintId,
     setSelectedComplaintId,
+    setActiveTab,
     upvoteComplaint,
   } = useCivicData();
   const { currentUser } = useAuth();
@@ -184,7 +436,19 @@ export const TrackComplaintView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'resolved'>('all');
   const [detailModalComplaint, setDetailModalComplaint] = useState<Complaint | null>(null);
   const [activeProofView, setActiveProofView] = useState<'before' | 'after'>('after');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const currentUserId = currentUser ? currentUser.id : 'guest_upvoter';
+
+  // Handle Copy ID
+  const handleCopyId = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Canonical status grouping
   const getCanonicalStatus = (status: ComplaintStatus): 'pending' | 'in_progress' | 'resolved' => {
     if (status === 'resolved' || status === 'awaiting_verification' || status === 'verified') {
       return 'resolved';
@@ -195,9 +459,13 @@ export const TrackComplaintView: React.FC = () => {
     return 'pending';
   };
 
-  const currentUserId = currentUser ? currentUser.id : 'guest_upvoter';
+  // Identify if there is a spotlighted complaint (from selectedComplaintId or exact search match)
+  const spotlightComplaint = complaints.find(
+    (c) =>
+      c.id.toUpperCase() === (selectedComplaintId || searchQuery).trim().toUpperCase()
+  );
 
-  // Filter complaints based on query and status filter
+  // Filter complaints list
   const filteredComplaints = complaints.filter((c) => {
     const canonical = getCanonicalStatus(c.status);
     if (statusFilter !== 'all' && canonical !== statusFilter) {
@@ -215,42 +483,45 @@ export const TrackComplaintView: React.FC = () => {
   });
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-16">
-      {/* Header & Search */}
-      <div className="bg-softwhite rounded-3xl p-6 sm:p-7 border border-sage shadow-card space-y-4">
+    <div className="max-w-5xl mx-auto space-y-8 pb-20">
+      {/* =======================================================================
+          TOP SEARCH & QUICK TICKETS HEADER
+         ======================================================================= */}
+      <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-4">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-burnt px-2.5 py-0.5 bg-peach rounded-full">
-            Transparent Grievance Registry
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-forest mt-1">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-50 border border-teal-200/70 rounded-full text-xs font-bold text-teal-900 mb-2">
+            <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse" />
+            <span>Delivery-Style Issue Progression</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-navy tracking-tight">
             Track Civic Issues
           </h1>
-          <p className="text-xs text-charcoal-muted mt-0.5">
-            Follow municipal complaints from photo submission through contractor repair and community verification.
+          <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl font-normal">
+            Follow municipal complaints from photo submission through contractor dispatch, on-site repairs, and photographic community verification.
           </p>
         </div>
 
-        {/* Search & Filter Bar */}
+        {/* Search & Fast-Action Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-charcoal-muted" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Complaint ID (e.g. CT-1001), category, or area..."
-              className="w-full pl-10 pr-4 py-2.5 bg-ivory rounded-xl border border-sage text-xs text-charcoal placeholder:text-charcoal-muted focus:outline-none focus:border-forest transition-colors"
+              placeholder="Search by Complaint ID (e.g. CP-8492, CP-3884, CT-1001), category, or area..."
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium text-navy placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:bg-white transition-all shadow-xs"
             />
           </div>
 
-          {/* 3-State Filter Chips */}
+          {/* Status Filter Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs font-semibold">
             {(['all', 'pending', 'in_progress', 'resolved'] as const).map((st) => {
               const label =
                 st === 'all'
                   ? 'All Records'
                   : st === 'pending'
-                  ? 'Pending'
+                  ? 'Reported'
                   : st === 'in_progress'
                   ? 'In Progress'
                   : 'Resolved';
@@ -260,10 +531,10 @@ export const TrackComplaintView: React.FC = () => {
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-2 rounded-xl transition-all duration-150 whitespace-nowrap ${
+                  className={`px-3 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     isSelected
-                      ? 'bg-forest text-softwhite shadow-xs font-bold'
-                      : 'bg-ivory hover:bg-sage/40 text-charcoal border border-sage'
+                      ? 'bg-navy text-white shadow-xs font-bold'
+                      : 'bg-slate-100 hover:bg-slate-200/70 text-slate-700'
                   }`}
                 >
                   {label}
@@ -272,209 +543,469 @@ export const TrackComplaintView: React.FC = () => {
             })}
           </div>
         </div>
-      </div>
 
-      {/* Complaints Grid with Staggered Entrance */}
-      {filteredComplaints.length === 0 ? (
-        <div className="text-center py-16 bg-softwhite rounded-3xl border border-sage p-8 space-y-3">
-          <AlertCircle size={36} className="mx-auto text-charcoal-muted" />
-          <h3 className="text-base font-bold text-forest">No Grievances Found</h3>
-          <p className="text-xs text-charcoal-muted max-w-sm mx-auto">
-            {searchQuery
-              ? `No complaints match "${searchQuery}". Try searching another area or ID.`
-              : 'No complaints match the selected status filter.'}
-          </p>
+        {/* Quick Suggestion Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+          <span className="text-slate-400 text-[11px] font-semibold">Quick Demonstrations:</span>
+          {[
+            { id: 'CP-8492', label: 'CP-8492 (Pothole · In Progress)' },
+            { id: 'CP-3884', label: 'CP-3884 (Streetlight · Verified Closed)' },
+            { id: 'CT-1001', label: 'CT-1001 (Drainage · Awaiting Audit)' },
+            { id: 'CT-1002', label: 'CT-1002 (Waste · Assigned)' },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setSelectedComplaintId(item.id);
+                setSearchQuery(item.id);
+              }}
+              className="px-2.5 py-1 bg-slate-50 hover:bg-teal-50 hover:text-teal-900 border border-slate-200 hover:border-teal-300 rounded-lg text-[11px] font-semibold text-slate-600 transition-colors cursor-pointer"
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatePresence>
-            {filteredComplaints.map((complaint, index) => {
-              const canonical = getCanonicalStatus(complaint.status);
-              const hasUpvoted = complaint.upvotedByUserIds.includes(currentUserId);
+      </section>
 
-              return (
-                <motion.div
-                  key={complaint.id}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: Math.min(index * 0.05, 0.3) }}
-                  whileHover={{ y: -3 }}
-                  className="bg-softwhite rounded-2xl border border-sage p-4 shadow-card hover:shadow-elevated transition-all flex flex-col justify-between space-y-3 group"
+      {/* =======================================================================
+          SPOTLIGHT SECTION: FULL DELIVERY TRACKING EXPERIENCE
+          Shown when a specific complaint is selected or searched directly
+         ======================================================================= */}
+      {spotlightComplaint && (
+        <section className="bg-white rounded-3xl border-2 border-teal-600/30 p-6 sm:p-8 shadow-lg space-y-6 animate-fadeIn">
+          {/* Spotlight Header: Complaint ID, Copy Button, Status & Map Action */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="text-xl sm:text-2xl font-black font-mono text-navy">
+                  #{spotlightComplaint.id}
+                </span>
+
+                <button
+                  onClick={(e) => handleCopyId(spotlightComplaint.id, e)}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Copy Complaint ID"
                 >
-                  {/* Top Header: ID, Category & Canonical Status Badge */}
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-mono font-extrabold text-forest bg-sage/70 px-2.5 py-0.5 rounded-md">
-                        {complaint.id}
-                      </span>
+                  {copiedId === spotlightComplaint.id ? (
+                    <>
+                      <Check size={13} className="text-emerald-600" />
+                      <span className="text-emerald-700">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={13} />
+                      <span>Copy ID</span>
+                    </>
+                  )}
+                </button>
 
-                      {/* Canonical Status Badge */}
-                      {canonical === 'pending' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                          <Clock size={11} className="text-amber-600 animate-pulse" />
-                          Pending
-                        </span>
-                      )}
-                      {canonical === 'in_progress' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
-                          <Wrench size={11} className="text-teal-600 animate-spin" />
-                          In Progress
-                        </span>
-                      )}
-                      {canonical === 'resolved' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          <CheckCircle2 size={11} className="text-emerald-600" />
-                          Resolved
-                        </span>
-                      )}
-                    </div>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-800">
+                  {CATEGORY_LABELS[spotlightComplaint.category] || spotlightComplaint.title}
+                </span>
+              </div>
 
-                    <h3 className="text-sm font-bold text-forest mt-2 line-clamp-1">
-                      {CATEGORY_LABELS[complaint.category] || complaint.title}
-                    </h3>
+              <h2 className="text-lg font-bold text-navy mt-1.5">
+                {spotlightComplaint.title}
+              </h2>
+            </div>
+
+            {/* Map Action Button */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedComplaintId(spotlightComplaint.id);
+                  setActiveTab('map');
+                }}
+                className="px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <MapPin size={15} className="text-teal-700" />
+                <span>View on Neighbourhood Map</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 6-Stage Delivery Progress Pipeline */}
+          <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-6 border border-slate-200/80">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Delivery-Style Resolution Pipeline
+            </h3>
+            <DeliveryProgressPipeline complaint={spotlightComplaint} />
+          </div>
+
+          {/* Dynamic Resolution Estimate Badge Callout */}
+          {(() => {
+            const estimate: ResolutionEstimate = calculateResolutionEstimate(spotlightComplaint);
+
+            return (
+              <div className={`rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${estimate.badgeColor}`}>
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    {estimate.isOverdue ? (
+                      <AlertCircle size={20} className="text-rose-600" />
+                    ) : estimate.type === 'resolved' ? (
+                      <CheckCircle2 size={20} className="text-emerald-600" />
+                    ) : (
+                      <Clock size={20} className="text-teal-700" />
+                    )}
                   </div>
+                  <div>
+                    <div className="font-extrabold text-sm leading-tight">
+                      {estimate.displayText}
+                    </div>
+                    <div className="text-xs opacity-90 mt-0.5">
+                      {estimate.basisText}
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Photo Thumbnail */}
-                  {complaint.photoUrl && (
-                    <div
-                      onClick={() => {
-                        setDetailModalComplaint(complaint);
-                        setActiveProofView(complaint.resolutionProof ? 'after' : 'before');
-                      }}
-                      className="relative h-40 rounded-xl overflow-hidden border border-sage/70 cursor-pointer group-hover:border-forest/40 transition-colors"
-                    >
-                      <img
-                        src={complaint.photoUrl}
-                        alt="Issue Evidence"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-charcoal/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
-                        <span className="text-[10px] font-semibold text-softwhite flex items-center gap-1">
-                          Inspect Resolution Track <ChevronRight size={12} />
-                        </span>
-                        {complaint.resolutionProof && (
-                          <span className="text-[9px] font-bold bg-emerald-600 text-softwhite px-2 py-0.5 rounded">
-                            Verified Proof Available
+                {estimate.targetDate && (
+                  <div className="text-left sm:text-right flex-shrink-0 text-xs font-semibold">
+                    <span className="block text-[10px] opacity-75 uppercase">Target Completion</span>
+                    <span>{estimate.targetDate}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Latest Official Update Callout Box */}
+          {spotlightComplaint.history.length > 0 && (() => {
+            const latest = spotlightComplaint.history[spotlightComplaint.history.length - 1];
+            const formatted = new Date(latest.timestamp).toLocaleDateString('en-IN', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return (
+              <div className="bg-navy rounded-2xl p-5 text-white shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-teal-accent animate-ping" />
+                    <span className="font-bold text-teal-accent text-[11px] uppercase tracking-wider">
+                      Latest Official Redressal Update
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">{formatted}</span>
+                </div>
+
+                <p className="text-sm font-semibold text-slate-100">
+                  {latest.action}
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed font-normal">
+                  "{latest.details}"
+                </p>
+
+                <div className="pt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                  <span>Authorized by:</span>
+                  <span className="font-bold text-slate-200">{latest.actorName}</span>
+                  <span>({latest.actorRole})</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Dual-Column Details: Responsible Department / Contractor & Location / Evidence */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Responsible Department & Contractor Card */}
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center gap-2">
+                <Building2 size={16} className="text-teal-700" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-navy">
+                  Responsible Department & Field Crew
+                </h4>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <span className="text-slate-500 font-medium block text-[11px]">Department Authority</span>
+                  <span className="font-bold text-navy">
+                    {spotlightComplaint.workOrder?.department ||
+                      (spotlightComplaint.category === 'road_damage'
+                        ? 'Public Works Department (PWD) - Roads'
+                        : spotlightComplaint.category === 'garbage_waste'
+                        ? 'Municipal Solid Waste Management (SWM)'
+                        : spotlightComplaint.category === 'streetlight_electrical'
+                        ? 'Electricity & Public Lighting Utility'
+                        : 'City Municipal Corporation')}
+                  </span>
+                </div>
+
+                {spotlightComplaint.workOrder ? (
+                  <>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Assigned Contractor</span>
+                      <span className="font-bold text-teal-900">{spotlightComplaint.workOrder.contractor}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Field Crew & Vehicle</span>
+                      <span className="font-semibold text-slate-700">{spotlightComplaint.workOrder.crew}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Service Level Agreement (SLA)</span>
+                      <span className="font-semibold text-slate-700">{spotlightComplaint.workOrder.slaHours} hours contracted window</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">
+                    Department triage acknowledged. Contractor work order generation currently queued.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Location & Photographic Audit Proof */}
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center gap-2">
+                <MapPin size={16} className="text-coral" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-navy">
+                  Location & Evidence
+                </h4>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <p className="text-slate-700 font-medium leading-relaxed">
+                  {spotlightComplaint.address}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Ward: <span className="font-semibold text-navy">{spotlightComplaint.ward}</span> · Coordinates: ({spotlightComplaint.latitude.toFixed(4)}, {spotlightComplaint.longitude.toFixed(4)})
+                </p>
+
+                {spotlightComplaint.photoUrl && (
+                  <div
+                    onClick={() => {
+                      setDetailModalComplaint(spotlightComplaint);
+                      setActiveProofView(spotlightComplaint.resolutionProof ? 'after' : 'before');
+                    }}
+                    className="relative h-28 rounded-xl overflow-hidden border border-slate-200 cursor-pointer group"
+                  >
+                    <img
+                      src={spotlightComplaint.photoUrl}
+                      alt="Defect evidence"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-navy/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                      <span>Click to Inspect Full Photo Audit</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* =======================================================================
+          NEIGHBOURHOOD GRIEVANCES REGISTRY GRID
+         ======================================================================= */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black text-navy">
+            Neighbourhood Issues ({filteredComplaints.length})
+          </h2>
+          <span className="text-xs text-slate-500">
+            Click any ticket to inspect its delivery progression
+          </span>
+        </div>
+
+        {filteredComplaints.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 p-8 space-y-3">
+            <AlertCircle size={36} className="mx-auto text-slate-400" />
+            <h3 className="text-base font-bold text-navy">No Grievances Found</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {searchQuery
+                ? `No complaints match "${searchQuery}". Try searching another area or ID.`
+                : 'No complaints match the selected status filter.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AnimatePresence>
+              {filteredComplaints.map((complaint, index) => {
+                const canonical = getCanonicalStatus(complaint.status);
+                const hasUpvoted = complaint.upvotedByUserIds.includes(currentUserId);
+                const estimate = calculateResolutionEstimate(complaint);
+                const isSelected = spotlightComplaint?.id === complaint.id;
+
+                return (
+                  <motion.div
+                    key={complaint.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: Math.min(index * 0.04, 0.25) }}
+                    whileHover={{ y: -2 }}
+                    onClick={() => {
+                      setSelectedComplaintId(complaint.id);
+                      setSearchQuery(complaint.id);
+                    }}
+                    className={`bg-white rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 cursor-pointer ${
+                      isSelected
+                        ? 'border-teal-600 ring-2 ring-teal-600/20'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {/* Header: ID, Copy & Canonical Status */}
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-black text-navy bg-slate-100 px-2.5 py-1 rounded-md">
+                            #{complaint.id}
+                          </span>
+                          <button
+                            onClick={(e) => handleCopyId(complaint.id, e)}
+                            className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-navy transition-colors"
+                            title="Copy ID"
+                          >
+                            {copiedId === complaint.id ? (
+                              <Check size={12} className="text-emerald-600" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
+                        </div>
+
+                        {canonical === 'pending' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            <Clock size={11} className="text-amber-600 animate-pulse" />
+                            Reported
+                          </span>
+                        )}
+                        {canonical === 'in_progress' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+                            <Wrench size={11} className="text-teal-600 animate-spin" />
+                            In Progress
+                          </span>
+                        )}
+                        {canonical === 'resolved' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            Resolved
                           </span>
                         )}
                       </div>
-                    </div>
-                  )}
 
-                  {/* Visual Status Journey Bar */}
-                  <ComplaintStatusJourney status={complaint.status} isCompact={true} />
-
-                  {/* Location & Details */}
-                  <div className="space-y-1 text-xs">
-                    <div className="flex items-center gap-1.5 text-charcoal font-medium">
-                      <MapPin size={13} className="text-burnt flex-shrink-0" />
-                      <span className="line-clamp-1">{complaint.address}</span>
-                    </div>
-
-                    {complaint.description && (
-                      <p className="text-[11px] text-charcoal-muted line-clamp-2">
-                        "{complaint.description}"
+                      <h3 className="text-sm font-bold text-navy mt-2.5 line-clamp-1">
+                        {CATEGORY_LABELS[complaint.category] || complaint.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-1 truncate">
+                        <MapPin size={12} className="text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{complaint.address}</span>
                       </p>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Bottom Footer: Upvote Button & View Details */}
-                  <div className="pt-2 border-t border-sage/60 flex items-center justify-between">
-                    {/* Upvote Button with Tactile Feedback */}
-                    <motion.button
-                      whileTap={{ scale: 0.88 }}
-                      onClick={() => upvoteComplaint(complaint.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        hasUpvoted
-                          ? 'bg-burnt text-softwhite shadow-xs'
-                          : 'bg-ivory hover:bg-sage/40 text-charcoal border border-sage'
-                      }`}
-                      title={hasUpvoted ? 'Remove your upvote' : 'Upvote this complaint to raise municipal priority'}
-                    >
-                      <motion.div
-                        animate={hasUpvoted ? { scale: [1, 1.35, 1] } : {}}
-                        transition={{ duration: 0.25 }}
+                    {/* Progress Journey Track */}
+                    <ComplaintStatusJourney status={complaint.status} isCompact={true} />
+
+                    {/* Resolution Estimate Micro-Callout */}
+                    <div className="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+                      <span className="text-slate-600 font-medium truncate">
+                        {estimate.displayText}
+                      </span>
+                      <span className="text-[10px] font-bold text-teal-700 flex-shrink-0 ml-2">
+                        Inspect →
+                      </span>
+                    </div>
+
+                    {/* Footer: Upvote & Full Details Modal */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          upvoteComplaint(complaint.id);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                          hasUpvoted
+                            ? 'bg-teal-600 text-white shadow-xs'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}
                       >
-                        <ThumbsUp size={13} className={hasUpvoted ? 'text-softwhite' : 'text-burnt'} />
-                      </motion.div>
-                      <span>{complaint.upvotes}</span>
-                      <span className="text-[10px] font-normal">{complaint.upvotes === 1 ? 'vote' : 'votes'}</span>
-                    </motion.button>
+                        <ThumbsUp size={12} className={hasUpvoted ? 'text-white' : 'text-slate-500'} />
+                        <span>{complaint.upvotes}</span>
+                      </motion.button>
 
-                    <button
-                      onClick={() => {
-                        setDetailModalComplaint(complaint);
-                        setActiveProofView(complaint.resolutionProof ? 'after' : 'before');
-                      }}
-                      className="text-xs font-bold text-forest hover:text-burnt flex items-center gap-1 transition-colors"
-                    >
-                      <span>Full Journey</span>
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetailModalComplaint(complaint);
+                          setActiveProofView(complaint.resolutionProof ? 'after' : 'before');
+                        }}
+                        className="text-xs font-bold text-teal-700 hover:text-navy flex items-center gap-1 transition-colors"
+                      >
+                        <span>Full Audit & Proof</span>
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+      </section>
 
-      {/* Comprehensive Complaint Detail Modal */}
+      {/* =======================================================================
+          COMPREHENSIVE COMPLAINT AUDIT MODAL (Before / After Evidence)
+         ======================================================================= */}
       {detailModalComplaint && (
-        <div className="fixed inset-0 bg-forest/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-softwhite rounded-3xl max-w-xl w-full border border-sage shadow-elevated p-6 relative my-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 relative my-6 space-y-4 max-h-[90vh] overflow-y-auto text-navy"
           >
             <button
               onClick={() => setDetailModalComplaint(null)}
-              className="absolute top-5 right-5 p-1.5 rounded-lg text-charcoal-muted hover:text-forest hover:bg-sage/40 transition-colors z-20"
+              className="absolute top-5 right-5 p-1.5 rounded-lg text-slate-400 hover:text-navy hover:bg-slate-100 transition-colors z-20 cursor-pointer"
               title="Close details"
             >
               <X size={18} />
             </button>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-extrabold text-forest bg-sage/70 px-3 py-1 rounded-md">
-                ID: {detailModalComplaint.id}
+              <span className="text-xs font-mono font-black text-navy bg-slate-100 px-3 py-1 rounded-md">
+                #{detailModalComplaint.id}
               </span>
-              <span className="text-[11px] font-bold text-burnt px-2 py-0.5 bg-peach rounded-md">
-                EDPS Priority: {detailModalComplaint.edpsScore}
+              <span className="text-[11px] font-bold text-teal-800 px-2.5 py-0.5 bg-teal-50 border border-teal-200 rounded-md">
+                EDPS Priority Score: {detailModalComplaint.edpsScore}/100
               </span>
             </div>
 
-            <h2 className="text-xl font-extrabold text-forest">
+            <h2 className="text-xl font-black text-navy">
               {CATEGORY_LABELS[detailModalComplaint.category] || detailModalComplaint.title}
             </h2>
 
-            {/* Visual Status Journey Component */}
-            <ComplaintStatusJourney status={detailModalComplaint.status} isCompact={false} />
+            {/* Delivery Progress Pipeline inside modal */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+              <DeliveryProgressPipeline complaint={detailModalComplaint} />
+            </div>
 
-            {/* Evidence Photo Toggle (Before vs After) */}
+            {/* Photographic Verification Evidence (Before vs After) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-forest">Photographic Verification Evidence</span>
+                <span className="text-navy">Photographic Audit Trail</span>
                 {detailModalComplaint.resolutionProof && (
-                  <div className="flex rounded-lg border border-sage bg-ivory p-0.5 text-[10px]">
+                  <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px]">
                     <button
                       onClick={() => setActiveProofView('before')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                      className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer ${
                         activeProofView === 'before'
-                          ? 'bg-forest text-softwhite'
-                          : 'text-charcoal-muted hover:text-charcoal'
+                          ? 'bg-navy text-white'
+                          : 'text-slate-600 hover:text-navy'
                       }`}
                     >
                       Reported Defect
                     </button>
                     <button
                       onClick={() => setActiveProofView('after')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                      className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer ${
                         activeProofView === 'after'
-                          ? 'bg-emerald-600 text-softwhite'
-                          : 'text-charcoal-muted hover:text-charcoal'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-600 hover:text-navy'
                       }`}
                     >
                       Resolution Proof ✓
@@ -484,7 +1015,7 @@ export const TrackComplaintView: React.FC = () => {
               </div>
 
               {/* Photo Display */}
-              <div className="h-52 rounded-2xl overflow-hidden border border-sage bg-ivory relative">
+              <div className="h-56 rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 relative">
                 <img
                   src={
                     activeProofView === 'after' && detailModalComplaint.resolutionProof?.afterPhotoUrl
@@ -492,60 +1023,50 @@ export const TrackComplaintView: React.FC = () => {
                       : detailModalComplaint.photoUrl
                   }
                   alt="Evidence"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
-                <div className="absolute bottom-2 left-2 bg-charcoal/85 backdrop-blur-xs text-softwhite text-[10px] font-semibold px-2 py-0.5 rounded">
+                <div className="absolute bottom-2 left-2 bg-navy/90 backdrop-blur-xs text-white text-[10px] font-semibold px-2.5 py-1 rounded-md shadow-xs">
                   {activeProofView === 'after' && detailModalComplaint.resolutionProof
-                    ? 'Contractor After-Repair Evidence'
-                    : 'Original Citizen Intake Photo'}
+                    ? `Contractor After-Repair Evidence (${detailModalComplaint.resolutionProof.geofenceDistanceMeters}m geofence valid)`
+                    : 'Original Citizen Intake Geotagged Evidence'}
                 </div>
               </div>
             </div>
 
-            {/* Location & Details Card */}
-            <div className="bg-ivory rounded-2xl p-4 border border-sage space-y-2 text-xs">
-              <div className="flex items-start gap-2 text-forest font-semibold">
-                <MapPin size={15} className="text-burnt flex-shrink-0 mt-0.5" />
+            {/* Location & Details */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-start gap-2 font-semibold text-navy">
+                <MapPin size={15} className="text-teal-600 flex-shrink-0 mt-0.5" />
                 <span>{detailModalComplaint.address}</span>
               </div>
-              <div className="text-[11px] text-charcoal-muted">
+              <div className="text-[11px] text-slate-500">
                 Jurisdiction: {detailModalComplaint.district}, {detailModalComplaint.state} • Coordinates: ({detailModalComplaint.latitude.toFixed(4)}, {detailModalComplaint.longitude.toFixed(4)})
               </div>
               {detailModalComplaint.description && (
-                <div className="pt-1 text-charcoal leading-relaxed">
-                  <span className="font-bold text-forest block">Citizen Statement:</span>
+                <div className="pt-1 text-slate-700 leading-relaxed">
+                  <span className="font-bold text-navy block text-[11px]">Citizen Description:</span>
                   "{detailModalComplaint.description}"
                 </div>
               )}
             </div>
 
-            {/* Work Order / Contractor info if present */}
-            {detailModalComplaint.workOrder && (
-              <div className="bg-teal-50/60 rounded-2xl p-3.5 border border-teal-200 text-xs space-y-1 text-teal-900">
-                <span className="font-bold text-[11px] text-teal-950 block">Municipal Work Order Dispatched</span>
-                <p className="text-[11px]">
-                  Assigned Contractor: <span className="font-semibold">{detailModalComplaint.workOrder.contractor}</span> ({detailModalComplaint.workOrder.crew})
-                </p>
-                <p className="text-[10px] text-teal-700">
-                  Target SLA: {detailModalComplaint.workOrder.slaHours} hours • Assigned by {detailModalComplaint.workOrder.officialName}
-                </p>
-              </div>
-            )}
-
-            {/* Upvote & Action Footer */}
-            <div className="flex items-center justify-between pt-2 border-t border-sage/60">
-              <motion.button
-                whileTap={{ scale: 0.92 }}
-                onClick={() => upvoteComplaint(detailModalComplaint.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-ivory hover:bg-sage/40 border border-sage rounded-xl font-bold text-xs text-charcoal transition-colors"
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setSelectedComplaintId(detailModalComplaint.id);
+                  setDetailModalComplaint(null);
+                  setActiveTab('map');
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <ThumbsUp size={14} className="text-burnt" />
-                <span>{detailModalComplaint.upvotes} Upvotes</span>
-              </motion.button>
+                <MapPin size={14} className="text-teal-600" />
+                <span>View on Map</span>
+              </button>
 
               <button
                 onClick={() => setDetailModalComplaint(null)}
-                className="px-5 py-2.5 bg-forest hover:bg-forest-hover text-softwhite rounded-xl font-bold text-xs transition-colors"
+                className="px-5 py-2.5 bg-navy hover:bg-navy-surface text-white rounded-xl font-bold text-xs transition-colors cursor-pointer"
               >
                 Done
               </button>

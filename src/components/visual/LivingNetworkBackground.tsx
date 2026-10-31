@@ -92,11 +92,11 @@ export const LivingNetworkBackground: React.FC<LivingNetworkBackgroundProps> = (
         nodes.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          vx: (Math.random() - 0.5) * (isMobile ? 0.3 : 0.5),
-          vy: (Math.random() - 0.5) * (isMobile ? 0.3 : 0.5),
+          vx: (Math.random() - 0.5) * (isMobile ? 0.25 : 0.4),
+          vy: (Math.random() - 0.5) * (isMobile ? 0.25 : 0.4),
           radius: baseRadius,
           baseRadius,
-          color: isOrange ? '#E05B2D' : '#0F3A36',
+          color: isOrange ? '#0D9488' : '#0B192C',
           pulseSpeed: 0.02 + Math.random() * 0.03,
           pulsePhase: Math.random() * Math.PI * 2,
           isOrange,
@@ -105,7 +105,7 @@ export const LivingNetworkBackground: React.FC<LivingNetworkBackgroundProps> = (
 
       // Initialize travelling data packets/particles
       particles = [];
-      const particleCount = isMobile ? 8 : 18;
+      const particleCount = isMobile ? 8 : 16;
       for (let p = 0; p < particleCount; p++) {
         const fromNode = Math.floor(Math.random() * nodes.length);
         let toNode = Math.floor(Math.random() * nodes.length);
@@ -115,8 +115,8 @@ export const LivingNetworkBackground: React.FC<LivingNetworkBackgroundProps> = (
           fromNode,
           toNode,
           progress: Math.random(),
-          speed: 0.003 + Math.random() * 0.006,
-          color: Math.random() < 0.35 ? '#E05B2D' : '#0F3A36',
+          speed: 0.003 + Math.random() * 0.005,
+          color: Math.random() < 0.5 ? '#14B8A6' : '#0D9488',
         });
       }
     };
@@ -152,10 +152,10 @@ export const LivingNetworkBackground: React.FC<LivingNetworkBackgroundProps> = (
 
         ctx.strokeStyle =
           w === 0
-            ? 'rgba(226, 237, 231, 0.45)' // Pale Sage
+            ? 'rgba(13, 148, 136, 0.04)' // Ambient Teal
             : w === 1
-            ? 'rgba(15, 58, 54, 0.05)' // Deep Teal soft
-            : 'rgba(224, 91, 45, 0.04)'; // Subtle Burnt Orange glow
+            ? 'rgba(11, 25, 44, 0.03)' // Ambient Navy
+            : 'rgba(20, 184, 166, 0.03)'; // Vibrant Accent glow
         ctx.lineWidth = w === 1 ? 1.5 : 1.0;
         ctx.stroke();
       }
@@ -201,15 +201,15 @@ export const LivingNetworkBackground: React.FC<LivingNetworkBackgroundProps> = (
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist < maxDistance) {
-            const alpha = (1 - dist / maxDistance) * 0.22;
+            const alpha = (1 - dist / maxDistance) * 0.16;
             ctx.beginPath();
             ctx.moveTo(nodeA.x, nodeA.y);
             ctx.lineTo(nodeB.x, nodeB.y);
 
             if (nodeA.isOrange || nodeB.isOrange) {
-              ctx.strokeStyle = `rgba(224, 91, 45, ${alpha * 1.4})`;
+              ctx.strokeStyle = `rgba(13, 148, 136, ${alpha * 1.2})`;
             } else {
-              ctx.strokeStyle = `rgba(15, 58, 54, ${alpha})`;
+              ctx.strokeStyle = `rgba(11, 25, 44, ${alpha})`;
             }
             ctx.lineWidth = 0.8;
             ctx.stroke();

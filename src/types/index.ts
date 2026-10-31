@@ -207,7 +207,103 @@ export type ViewTab =
   | 'report'
   | 'track'
   | 'map'
+  | 'civic_pulse'
+  | 'community_action'
   | 'my_complaints'
+  | 'citizen_dashboard'
   | 'citizen_profile'
   | 'official_dashboard'
   | 'super_admin_dashboard';
+
+// -----------------------------------------------------------------------------
+// COMMUNITY ACTION & CHALLENGE DATA MODELS
+// -----------------------------------------------------------------------------
+export type ChallengeStatus = 'active' | 'upcoming' | 'completed' | 'under_review';
+
+export interface VolunteerActivity {
+  id: string;
+  challengeId: string;
+  title: string;
+  description: string;
+  location: string;
+  scheduledDate: string;
+  coordinatorName: string;
+  coordinatorRole: string;
+  isOfficiallyApproved: boolean;
+  status: 'scheduled' | 'in_progress' | 'completed';
+  maxVolunteers?: number;
+  registeredUserIds: string[]; // Stored privately
+  confirmedUserIds: string[];  // Checked-in participants
+  completedNotes?: string;
+  completedAt?: string;
+}
+
+export interface ChallengeActivityUpdate {
+  id: string;
+  timestamp: string;
+  type:
+    | 'hotspot_reported'
+    | 'volunteer_joined'
+    | 'activity_scheduled'
+    | 'activity_completed'
+    | 'official_update'
+    | 'improvement_verified';
+  actorName: string;
+  actorRole: string;
+  details: string;
+  complaintId?: string;
+  activityId?: string;
+  evidencePhotoUrl?: string;
+}
+
+export interface CommunityProgressMetric {
+  score: number; // 0 - 100
+  baselineScore: number;
+  targetScore: number;
+  hotspotsReportedCount: number;
+  hotspotsReviewedCount: number;
+  cleanupActivitiesCompletedCount: number;
+  totalActivitiesCount: number;
+  verifiedImprovementsCount: number;
+  participatingResidentsCount: number;
+  factors: {
+    name: string;
+    weight: number; // percentage
+    achieved: number; // 0 - 100
+    description: string;
+  }[];
+  lastCalculatedAt: string;
+  isDataSufficient: boolean;
+}
+
+export interface CommunityChallenge {
+  id: string;
+  title: string;
+  tagline: string;
+  description: string;
+  targetProblemCategory: ComplaintCategory;
+  ward: string;
+  district: string;
+  state: string;
+  status: ChallengeStatus;
+  startDate: string;
+  endDate: string;
+  isDemoData: boolean;
+  coverImageUrl?: string;
+  organizerName: string;
+  organizerRole: string;
+  isOfficial: boolean;
+  targets: {
+    targetHotspotsToAddress: number;
+    targetVolunteerCleanups: number;
+    targetResidentParticipation: number;
+  };
+  participatingUserIds: string[];
+  associatedComplaintIds: string[];
+  volunteerActivities: VolunteerActivity[];
+  updates: ChallengeActivityUpdate[];
+  participationRules: string[];
+  progressScore: CommunityProgressMetric;
+  createdAt: string;
+  updatedAt: string;
+}

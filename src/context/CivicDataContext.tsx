@@ -10,6 +10,9 @@ import {
   ComplaintHistoryEntry,
   CitizenNotification,
   AuditLogEntry,
+  CommunityChallenge,
+  VolunteerActivity,
+  ChallengeActivityUpdate,
 } from '../types';
 import {
   getAllComplaints,
@@ -18,19 +21,28 @@ import {
   updateComplaintRecord,
   addNotification,
   addAuditLogEntry,
+  syncFromIndexedDb,
+  getAllChallenges,
+  saveAllChallenges,
+  findChallengeById,
+  updateChallengeRecord,
 } from '../lib/db';
 import { calculateEdps } from '../lib/edpsCalculator';
 import { checkDuplicateComplaint, DuplicateCheckResult } from '../lib/duplicateCheck';
 import { validateResolutionGeofence, recordCitizenVote } from '../lib/geofence';
 import { computeSha256Sync } from '../lib/cryptoAuth';
+import { calculateCommunityScore } from '../lib/communityScoreEngine';
 import { useAuth } from './AuthContext';
 
 interface CivicDataContextType {
   complaints: Complaint[];
+  challenges: CommunityChallenge[];
   activeTab: ViewTab;
   setActiveTab: (tab: ViewTab) => void;
   selectedComplaintId: string | null;
   setSelectedComplaintId: (id: string | null) => void;
+  selectedChallengeId: string | null;
+  setSelectedChallengeId: (id: string | null) => void;
   submitNewComplaint: (data: {
     title: string;
     description: string;
@@ -42,6 +54,7 @@ interface CivicDataContextType {
     longitude: number;
     ward?: string;
     photoUrl: string;
+    linkedChallengeId?: string;
   }) => Complaint;
   checkDuplicates: (lat: number, lng: number, category: ComplaintCategory) => DuplicateCheckResult;
   upvoteComplaint: (complaintId: string) => void;
@@ -79,6 +92,39 @@ interface CivicDataContextType {
   ) => boolean;
   searchComplaintById: (queryId: string) => Complaint | undefined;
   refreshComplaints: () => void;
+  // Community Action methods
+  refreshChallenges: () => void;
+  joinChallenge: (challengeId: string) => boolean;
+  leaveChallenge: (challengeId: string) => boolean;
+  registerForVolunteerActivity: (challengeId: string, activityId: string) => boolean;
+  completeVolunteerActivity: (challengeId: string, activityId: string, notes?: string) => boolean;
+  linkComplaintToChallenge: (challengeId: string, complaintId: string) => boolean;
+  createNewChallenge: (data: {
+    title: string;
+    tagline: string;
+    description: string;
+    targetProblemCategory: ComplaintCategory;
+    ward: string;
+    district?: string;
+    state?: string;
+    startDate: string;
+    endDate: string;
+    organizerName?: string;
+    organizerRole?: string;
+    isOfficial?: boolean;
+    isDemoData?: boolean;
+    targets: {
+      targetHotspotsToAddress: number;
+      targetVolunteerCleanups: number;
+      targetResidentParticipation: number;
+    };
+    participationRules?: string[];
+  }) => CommunityChallenge;
+  postChallengeOfficialUpdate: (
+    challengeId: string,
+    update: { details: string; type?: ChallengeActivityUpdate['type'] }
+  ) => boolean;
+  verifyChallengeImprovement: (challengeId: string, complaintId: string, notes: string) => boolean;
 }
 
 const CivicDataContext = createContext<CivicDataContextType | undefined>(undefined);
@@ -86,16 +132,78 @@ const CivicDataContext = createContext<CivicDataContextType | undefined>(undefin
 export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [activeTab, setActiveTab] = useState<ViewTab>('home');
-  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
+  const [challenges, setChallenges] = useState<CommunityChallenge[]>([]);
+
+  const getInitialTab = (): ViewTab => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as ViewTab;
+      if (
+        tabParam &&
+        [
+          'home',
+          'track',
+          'map',
+          'civic_pulse',
+          'community_action',
+          'my_complaints',
+          'official_dashboard',
+        ].includes(tabParam)
+      ) {
+        return tabParam;
+      }
+      if (params.get('challenge')) return 'community_action';
+      if (params.get('track')) return 'track';
+    }
+    return 'home';
+  };
+
+  const getInitialSelectedId = (): string | null => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('track') || params.get('id') || null;
+    }
+    return null;
+  };
+
+  const getInitialChallengeId = (): string | null => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('challenge') || null;
+    }
+    return null;
+  };
+
+  const [activeTab, setActiveTab] = useState<ViewTab>(getInitialTab);
+  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(getInitialSelectedId);
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(getInitialChallengeId);
+
+  const refreshChallenges = () => {
+    const rawChallenges = getAllChallenges();
+    const currentComplaints = getAllComplaints();
+    const scored = rawChallenges.map((ch) => ({
+      ...ch,
+      progressScore: calculateCommunityScore(ch, currentComplaints),
+    }));
+    setChallenges(scored);
+  };
 
   const refreshComplaints = () => {
     const records = getAllComplaints();
     setComplaints(records);
+    refreshChallenges();
   };
 
   useEffect(() => {
     refreshComplaints();
+    refreshChallenges();
+    // Hydrate any complaints stored in IndexedDB asynchronously
+    syncFromIndexedDb().then((synced) => {
+      if (synced && synced.length > 0) {
+        setComplaints(synced);
+        refreshChallenges();
+      }
+    });
   }, []);
 
   const checkDuplicates = (
@@ -117,6 +225,7 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     longitude: number;
     ward?: string;
     photoUrl: string;
+    linkedChallengeId?: string;
   }): Complaint => {
     const nextNum = 1000 + complaints.length + 1;
     const newId = `CT-${nextNum}`;
@@ -166,6 +275,10 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     dbCreateComplaint(newComplaint);
+
+    if (data.linkedChallengeId) {
+      linkComplaintToChallenge(data.linkedChallengeId, newId);
+    }
 
     // Citizen notification
     if (currentUser) {
@@ -709,6 +822,406 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return false;
   };
 
+  // ---------------------------------------------------------------------------
+  // COMMUNITY ACTION & CHALLENGE MANAGEMENT METHODS
+  // ---------------------------------------------------------------------------
+  const joinChallenge = (challengeId: string): boolean => {
+    const userId = currentUser ? currentUser.id : 'usr_guest_resident';
+    const userName = currentUser ? currentUser.name : 'Neighbourhood Resident';
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      if (prev.participatingUserIds.includes(userId)) {
+        return prev;
+      }
+
+      const nextParticipants = [...prev.participatingUserIds, userId];
+      const newUpdate: ChallengeActivityUpdate = {
+        id: `upd_join_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'volunteer_joined',
+        actorName: userName,
+        actorRole: currentUser?.role === 'citizen' ? 'Verified Citizen' : 'Local Resident',
+        details: `${userName} joined the community challenge to support neighborhood progress.`,
+      };
+
+      const updatedCh = {
+        ...prev,
+        participatingUserIds: nextParticipants,
+        updates: [newUpdate, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, complaints),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const leaveChallenge = (challengeId: string): boolean => {
+    const userId = currentUser ? currentUser.id : 'usr_guest_resident';
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const nextParticipants = prev.participatingUserIds.filter((id) => id !== userId);
+      const updatedCh = {
+        ...prev,
+        participatingUserIds: nextParticipants,
+        updatedAt: new Date().toISOString(),
+      };
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, complaints),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const registerForVolunteerActivity = (challengeId: string, activityId: string): boolean => {
+    const userId = currentUser ? currentUser.id : 'usr_guest_volunteer';
+    const userName = currentUser ? currentUser.name : 'Community Volunteer';
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const actIndex = prev.volunteerActivities.findIndex((a) => a.id === activityId);
+      if (actIndex === -1) return prev;
+
+      const act = prev.volunteerActivities[actIndex];
+      if (act.registeredUserIds.includes(userId)) return prev;
+
+      const updatedAct: VolunteerActivity = {
+        ...act,
+        registeredUserIds: [...act.registeredUserIds, userId],
+      };
+
+      const updatedActivities = [...prev.volunteerActivities];
+      updatedActivities[actIndex] = updatedAct;
+
+      const newUpdate: ChallengeActivityUpdate = {
+        id: `upd_vol_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'volunteer_joined',
+        actorName: userName,
+        actorRole: 'Registered Volunteer',
+        details: `${userName} registered for volunteer activity "${act.title}".`,
+        activityId,
+      };
+
+      const updatedCh = {
+        ...prev,
+        volunteerActivities: updatedActivities,
+        updates: [newUpdate, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, complaints),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const completeVolunteerActivity = (
+    challengeId: string,
+    activityId: string,
+    notes?: string
+  ): boolean => {
+    const isAuthorized =
+      currentUser?.role === 'government' ||
+      currentUser?.role === 'official' ||
+      currentUser?.role === 'super_admin';
+
+    const coordinatorName = currentUser?.name || 'Authorized Field Coordinator';
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const actIndex = prev.volunteerActivities.findIndex((a) => a.id === activityId);
+      if (actIndex === -1) return prev;
+
+      const act = prev.volunteerActivities[actIndex];
+      const updatedAct: VolunteerActivity = {
+        ...act,
+        status: 'completed',
+        completedNotes: notes || 'Activity completed with community volunteer attendance.',
+        completedAt: new Date().toISOString(),
+        confirmedUserIds: [...act.registeredUserIds],
+      };
+
+      const updatedActivities = [...prev.volunteerActivities];
+      updatedActivities[actIndex] = updatedAct;
+
+      const newUpdate: ChallengeActivityUpdate = {
+        id: `upd_act_done_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'activity_completed',
+        actorName: coordinatorName,
+        actorRole: isAuthorized ? 'Official Coordinator' : 'Community Lead',
+        details: `Volunteer activity "${act.title}" marked completed. ${act.registeredUserIds.length} volunteer participations recorded.`,
+        activityId,
+      };
+
+      const updatedCh = {
+        ...prev,
+        volunteerActivities: updatedActivities,
+        updates: [newUpdate, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, complaints),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const linkComplaintToChallenge = (challengeId: string, complaintId: string): boolean => {
+    const targetComp = complaints.find((c) => c.id.toUpperCase() === complaintId.toUpperCase());
+    const actorName = currentUser ? currentUser.name : 'Ward Resident';
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      if (prev.associatedComplaintIds.includes(complaintId)) return prev;
+
+      const nextComplaints = [...prev.associatedComplaintIds, complaintId];
+      const newUpdate: ChallengeActivityUpdate = {
+        id: `upd_link_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'hotspot_reported',
+        actorName,
+        actorRole: 'Citizen Submitter',
+        details: `Civic hotspot #${complaintId} (${targetComp?.title || 'Reported Issue'}) linked to challenge.`,
+        complaintId,
+      };
+
+      const updatedCh = {
+        ...prev,
+        associatedComplaintIds: nextComplaints,
+        updates: [newUpdate, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, complaints),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const createNewChallenge = (data: {
+    title: string;
+    tagline: string;
+    description: string;
+    targetProblemCategory: ComplaintCategory;
+    ward: string;
+    district?: string;
+    state?: string;
+    startDate: string;
+    endDate: string;
+    organizerName?: string;
+    organizerRole?: string;
+    isOfficial?: boolean;
+    isDemoData?: boolean;
+    targets: {
+      targetHotspotsToAddress: number;
+      targetVolunteerCleanups: number;
+      targetResidentParticipation: number;
+    };
+    participationRules?: string[];
+  }): CommunityChallenge => {
+    const isOfficial =
+      data.isOfficial !== undefined
+        ? data.isOfficial
+        : currentUser?.role === 'government' ||
+          currentUser?.role === 'official' ||
+          currentUser?.role === 'super_admin';
+
+    const newId = `CH-${Date.now().toString().slice(-4)}`;
+    const nowIso = new Date().toISOString();
+
+    const initialUpdate: ChallengeActivityUpdate = {
+      id: `upd_init_${Date.now()}`,
+      timestamp: nowIso,
+      type: 'official_update',
+      actorName: data.organizerName || (currentUser ? currentUser.name : 'Community Organizer'),
+      actorRole: data.organizerRole || (isOfficial ? 'Municipal Official' : 'Resident Organizer'),
+      details: isOfficial
+        ? `Challenge "${data.title}" officially published for ${data.ward}.`
+        : `Challenge proposal submitted for municipal review and community support.`,
+    };
+
+    const newChallenge: CommunityChallenge = {
+      id: newId,
+      title: data.title.trim(),
+      tagline: data.tagline.trim(),
+      description: data.description.trim(),
+      targetProblemCategory: data.targetProblemCategory,
+      ward: data.ward.trim(),
+      district: data.district || 'Local Administration',
+      state: data.state || 'India',
+      status: isOfficial ? 'active' : 'under_review',
+      startDate: data.startDate,
+      endDate: data.endDate,
+      isDemoData: data.isDemoData || false,
+      organizerName: data.organizerName || (currentUser ? currentUser.name : 'Ward Resident Taskforce'),
+      organizerRole: data.organizerRole || (isOfficial ? (currentUser?.department || 'Municipal Directorate') : 'Citizen Lead'),
+      isOfficial,
+      targets: data.targets,
+      participatingUserIds: currentUser ? [currentUser.id] : [],
+      associatedComplaintIds: [],
+      volunteerActivities: [],
+      updates: [initialUpdate],
+      participationRules: data.participationRules && data.participationRules.length > 0
+        ? data.participationRules
+        : [
+            'All reported hotspots must include photographic proof and GPS coordinates.',
+            'Volunteers must follow municipal safety guidelines during group drives.',
+            'Improvements must be verified through physical consensus or authorized inspection.',
+          ],
+      progressScore: {
+        score: 0,
+        baselineScore: 20,
+        targetScore: 85,
+        hotspotsReportedCount: 0,
+        hotspotsReviewedCount: 0,
+        cleanupActivitiesCompletedCount: 0,
+        totalActivitiesCount: 0,
+        verifiedImprovementsCount: 0,
+        participatingResidentsCount: currentUser ? 1 : 0,
+        factors: [
+          {
+            name: 'Hotspots Reviewed & Triage',
+            weight: 35,
+            achieved: 0,
+            description: 'Hotspots will be tracked as community members log issues.',
+          },
+          {
+            name: 'Verified Physical Fixes',
+            weight: 30,
+            achieved: 0,
+            description: 'Verified repairs count toward this metric.',
+          },
+          {
+            name: 'Completed Approved Activities',
+            weight: 25,
+            achieved: 0,
+            description: 'Volunteer cleanup drives count toward this metric.',
+          },
+          {
+            name: 'Resident Participation',
+            weight: 10,
+            achieved: currentUser ? 5 : 0,
+            description: 'Resident sign-ups count toward community engagement.',
+          },
+        ],
+        lastCalculatedAt: nowIso,
+        isDataSufficient: false,
+      },
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    const all = getAllChallenges();
+    all.unshift(newChallenge);
+    saveAllChallenges(all);
+    refreshChallenges();
+    return newChallenge;
+  };
+
+  const postChallengeOfficialUpdate = (
+    challengeId: string,
+    update: { details: string; type?: ChallengeActivityUpdate['type'] }
+  ): boolean => {
+    const actorName = currentUser ? currentUser.name : 'Ward Operations Desk';
+    const actorRole = currentUser ? (currentUser.department || currentUser.role) : 'Municipal Official';
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const newUpd: ChallengeActivityUpdate = {
+        id: `upd_off_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: update.type || 'official_update',
+        actorName,
+        actorRole,
+        details: update.details,
+      };
+
+      return {
+        ...prev,
+        updates: [newUpd, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const verifyChallengeImprovement = (
+    challengeId: string,
+    complaintId: string,
+    notes: string
+  ): boolean => {
+    // 1. Verify complaint resolution in complaints ledger
+    verifyComplaintResolution(complaintId, notes);
+
+    // 2. Add verified improvement entry to challenge
+    const actorName = currentUser ? currentUser.name : 'Ward Verification Officer';
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const newUpd: ChallengeActivityUpdate = {
+        id: `upd_verif_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'improvement_verified',
+        actorName,
+        actorRole: 'Authorized Verifier',
+        details: `Improvement verified for complaint #${complaintId}: "${notes}".`,
+        complaintId,
+      };
+
+      const updatedCh = {
+        ...prev,
+        updates: [newUpd, ...prev.updates],
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        ...updatedCh,
+        progressScore: calculateCommunityScore(updatedCh, getAllComplaints()),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
   const searchComplaintById = (queryId: string): Complaint | undefined => {
     const clean = queryId.trim().toUpperCase();
     return complaints.find(c => c.id.toUpperCase() === clean);
@@ -718,10 +1231,13 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <CivicDataContext.Provider
       value={{
         complaints,
+        challenges,
         activeTab,
         setActiveTab,
         selectedComplaintId,
         setSelectedComplaintId,
+        selectedChallengeId,
+        setSelectedChallengeId,
         submitNewComplaint,
         checkDuplicates,
         upvoteComplaint,
@@ -735,6 +1251,15 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         updateComplaintStatus,
         searchComplaintById,
         refreshComplaints,
+        refreshChallenges,
+        joinChallenge,
+        leaveChallenge,
+        registerForVolunteerActivity,
+        completeVolunteerActivity,
+        linkComplaintToChallenge,
+        createNewChallenge,
+        postChallengeOfficialUpdate,
+        verifyChallengeImprovement,
       }}
     >
       {children}

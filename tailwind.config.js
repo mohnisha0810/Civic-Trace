@@ -4,6 +4,27 @@ export default {
   theme: {
     extend: {
       colors: {
+        navy: {
+          DEFAULT: '#0B192C',
+          deep: '#071220',
+          dark: '#050D17',
+          surface: '#112239',
+          muted: '#1E293B',
+          light: '#233857',
+        },
+        teal: {
+          DEFAULT: '#0D9488',
+          deep: '#0F766E',
+          hover: '#115E59',
+          accent: '#14B8A6',
+          light: '#CCFBF1',
+          surface: '#F0FDFA',
+        },
+        coral: {
+          DEFAULT: '#E11D48',
+          hover: '#BE123C',
+          light: '#FFE4E6',
+        },
         forest: {
           DEFAULT: '#0F3A36',
           deep: '#0F3A36',

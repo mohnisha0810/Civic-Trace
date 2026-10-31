@@ -5,12 +5,21 @@ import {
   AuditLogEntry,
   CitizenNotification,
   GovernmentVerificationStatus,
+  CommunityChallenge,
 } from '../types';
 import { generateSalt, hashPassword } from './cryptoAuth';
+import {
+  persistComplaintToIndexedDb,
+  persistAuditLogToIndexedDb,
+  loadAllComplaintsFromIndexedDb,
+} from './indexedDbStorage';
+import { getInitialSeedComplaints } from './seedComplaints';
+import { getInitialSeedChallenges } from './seedChallenges';
 
 const DB_USERS_KEY = 'civictrace_db_users_v4';
 const DB_SESSION_KEY = 'civictrace_db_session_v4';
 const DB_COMPLAINTS_KEY = 'civictrace_db_complaints_v4';
+const DB_CHALLENGES_KEY = 'civictrace_db_challenges_v1';
 const DB_OTP_KEY = 'civictrace_db_otps_v4';
 const DB_AUDIT_LOGS_KEY = 'civictrace_db_audit_logs_v4';
 const DB_NOTIFICATIONS_KEY = 'civictrace_db_notifications_v4';
@@ -186,10 +195,20 @@ export function clearStoredSession(): void {
 export function getAllComplaints(): Complaint[] {
   try {
     const raw = localStorage.getItem(DB_COMPLAINTS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (!raw) {
+      const seeds = getInitialSeedComplaints();
+      saveAllComplaints(seeds);
+      return seeds;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      const seeds = getInitialSeedComplaints();
+      saveAllComplaints(seeds);
+      return seeds;
+    }
+    return parsed;
   } catch {
-    return [];
+    return getInitialSeedComplaints();
   }
 }
 
@@ -197,7 +216,16 @@ export function saveAllComplaints(complaints: Complaint[]): void {
   try {
     localStorage.setItem(DB_COMPLAINTS_KEY, JSON.stringify(complaints));
   } catch (err) {
-    console.error('Failed to persist complaints to database:', err);
+    console.warn('LocalStorage quota limit reached. Pruning oversized photo data for local cache:', err);
+    try {
+      const lightweight = complaints.map(c => ({
+        ...c,
+        photoUrl: c.photoUrl && c.photoUrl.length > 500 ? c.photoUrl.slice(0, 80) + '...[IndexedDB-Backed]' : c.photoUrl,
+      }));
+      localStorage.setItem(DB_COMPLAINTS_KEY, JSON.stringify(lightweight));
+    } catch (innerErr) {
+      console.error('Failed to persist cache to localStorage:', innerErr);
+    }
   }
 }
 
@@ -211,6 +239,11 @@ export function createComplaint(complaint: Complaint): void {
   const complaints = getAllComplaints();
   complaints.unshift(complaint);
   saveAllComplaints(complaints);
+
+  // Mirror full fidelity complaint to IndexedDB
+  persistComplaintToIndexedDb(complaint).catch(err => {
+    console.warn('Failed to mirror complaint into IndexedDB:', err);
+  });
 }
 
 export function updateComplaintRecord(
@@ -224,6 +257,86 @@ export function updateComplaintRecord(
   const updated = updater(complaints[index]);
   complaints[index] = updated;
   saveAllComplaints(complaints);
+
+  // Mirror updated complaint to IndexedDB
+  persistComplaintToIndexedDb(updated).catch(err => {
+    console.warn('Failed to mirror updated complaint into IndexedDB:', err);
+  });
+  return updated;
+}
+
+export async function syncFromIndexedDb(): Promise<Complaint[]> {
+  try {
+    const idbComplaints = await loadAllComplaintsFromIndexedDb();
+    if (idbComplaints && idbComplaints.length > 0) {
+      const local = getAllComplaints();
+      const existingIds = new Set(local.map(c => c.id.toUpperCase()));
+      let hasNew = false;
+      for (const comp of idbComplaints) {
+        if (!existingIds.has(comp.id.toUpperCase())) {
+          local.push(comp);
+          hasNew = true;
+        }
+      }
+      if (hasNew) {
+        saveAllComplaints(local);
+      }
+      return local;
+    }
+  } catch (err) {
+    console.warn('Could not sync from IndexedDB:', err);
+  }
+  return getAllComplaints();
+}
+
+// -----------------------------------------------------------------------------
+// COMMUNITY CHALLENGES STORAGE
+// -----------------------------------------------------------------------------
+export function getAllChallenges(): CommunityChallenge[] {
+  try {
+    const raw = localStorage.getItem(DB_CHALLENGES_KEY);
+    if (!raw) {
+      const seeds = getInitialSeedChallenges();
+      saveAllChallenges(seeds);
+      return seeds;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      const seeds = getInitialSeedChallenges();
+      saveAllChallenges(seeds);
+      return seeds;
+    }
+    return parsed;
+  } catch {
+    return getInitialSeedChallenges();
+  }
+}
+
+export function saveAllChallenges(challenges: CommunityChallenge[]): void {
+  try {
+    localStorage.setItem(DB_CHALLENGES_KEY, JSON.stringify(challenges));
+  } catch (err) {
+    console.error('Failed to save challenges:', err);
+  }
+}
+
+export function findChallengeById(id: string): CommunityChallenge | undefined {
+  const challenges = getAllChallenges();
+  const cleanId = id.trim().toUpperCase();
+  return challenges.find((c) => c.id.toUpperCase() === cleanId);
+}
+
+export function updateChallengeRecord(
+  id: string,
+  updater: (prev: CommunityChallenge) => CommunityChallenge
+): CommunityChallenge | null {
+  const challenges = getAllChallenges();
+  const index = challenges.findIndex((c) => c.id.toUpperCase() === id.trim().toUpperCase());
+  if (index === -1) return null;
+
+  const updated = updater(challenges[index]);
+  challenges[index] = updated;
+  saveAllChallenges(challenges);
   return updated;
 }
 
@@ -245,6 +358,11 @@ export function addAuditLogEntry(entry: AuditLogEntry): void {
     const logs = getAllAuditLogs();
     logs.unshift(entry);
     localStorage.setItem(DB_AUDIT_LOGS_KEY, JSON.stringify(logs.slice(0, 500)));
+
+    // Mirror audit log to IndexedDB
+    persistAuditLogToIndexedDb(entry).catch(err => {
+      console.warn('Failed to mirror audit log to IndexedDB:', err);
+    });
   } catch (err) {
     console.error('Failed to save audit log:', err);
   }

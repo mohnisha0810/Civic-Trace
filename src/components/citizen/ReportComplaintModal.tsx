@@ -14,11 +14,14 @@ import {
   FileText,
   Scan,
   ShieldAlert,
+  Target,
 } from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { ComplaintCategory, Complaint } from '../../types';
 import { reverseGeocodeIndia } from '../../lib/indiaGeoService';
 import { classifyCivicImage, CATEGORY_LABELS } from '../../lib/imageClassifier';
+import { optimizeAndSanitizeImage, OptimizedImageResult } from '../../lib/imageOptimization';
+import { persistComplaintToIndexedDb } from '../../lib/indexedDbStorage';
 
 interface ReportComplaintModalProps {
   isOpen: boolean;
@@ -38,10 +41,19 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { submitNewComplaint, setSelectedComplaintId, setActiveTab } = useCivicData();
+  const {
+    submitNewComplaint,
+    setSelectedComplaintId,
+    setActiveTab,
+    challenges,
+    selectedChallengeId,
+  } = useCivicData();
+
+  const selectedChallenge = challenges.find((c) => c.id === selectedChallengeId);
 
   // 1. Photo state & drag-and-drop
   const [photoDataUrl, setPhotoDataUrl] = useState<string>('');
+  const [imageMeta, setImageMeta] = useState<OptimizedImageResult | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [isScanningImage, setIsScanningImage] = useState<boolean>(false);
   const [detectedCategoryLabel, setDetectedCategoryLabel] = useState<string | null>(null);
@@ -72,6 +84,7 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setPhotoDataUrl('');
+      setImageMeta(null);
       setIsDragOver(false);
       setIsScanningImage(false);
       setDetectedCategoryLabel(null);
@@ -133,41 +146,37 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
     );
   };
 
-  // Process chosen or dropped image
-  const processImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setSubmitError('Please provide a valid image file (JPEG, PNG, WebP).');
-      return;
-    }
-
+  // Process chosen or dropped image with client-side compression and EXIF sanitization
+  const processImageFile = async (file: File) => {
     setSubmitError(null);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result === 'string') {
-        const dataUrl = reader.result;
-        setPhotoDataUrl(dataUrl);
+    setIsScanningImage(true);
 
-        // Auto-detect GPS if not yet confirmed
-        if (!gpsConfirmed && !isLocatingGps) {
-          requestDeviceLocation();
-        }
+    try {
+      // 1. Optimize & sanitize camera photo (scales down 10-15MB photos to ~150KB, strips malicious EXIF)
+      const optimized = await optimizeAndSanitizeImage(file);
+      setPhotoDataUrl(optimized.dataUrl);
+      setImageMeta(optimized);
 
-        // Run client-side visual classification with scanning animation
-        setIsScanningImage(true);
-        try {
-          const result = await classifyCivicImage(dataUrl);
-          setCategory(result.category);
-          setDetectedCategoryLabel(result.categoryLabel);
-        } catch {
-          setDetectedCategoryLabel(null);
-        } finally {
-          setTimeout(() => {
-            setIsScanningImage(false);
-          }, 700);
-        }
+      // 2. Auto-detect GPS if not yet confirmed
+      if (!gpsConfirmed && !isLocatingGps) {
+        requestDeviceLocation();
       }
-    };
-    reader.readAsDataURL(file);
+
+      // 3. Run client-side visual classification with scanning animation
+      try {
+        const result = await classifyCivicImage(optimized.dataUrl);
+        setCategory(result.category);
+        setDetectedCategoryLabel(result.categoryLabel);
+      } catch {
+        setDetectedCategoryLabel(null);
+      }
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Failed to process image file. Please provide a valid JPEG, PNG, or WebP photo.');
+    } finally {
+      setTimeout(() => {
+        setIsScanningImage(false);
+      }, 700);
+    }
   };
 
   // Drag and drop handlers
@@ -224,6 +233,12 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
         latitude: effectiveLat,
         longitude: effectiveLng,
         photoUrl: photoDataUrl,
+        linkedChallengeId: selectedChallengeId || undefined,
+      });
+
+      // Step 1b: Resiliently persist to IndexedDB object storage
+      persistComplaintToIndexedDb(newRecord).catch((err) => {
+        console.warn('IndexedDB persistence notification:', err);
       });
 
       // Step 2: Trigger signature morphing animation sequence
@@ -424,6 +439,17 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
               <p className="text-xs text-charcoal-muted mt-0.5">
                 Capture the problem, verify location, and submit to municipal ledger.
               </p>
+              {selectedChallenge && (
+                <div className="mt-2.5 p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Target size={14} className="text-teal-700 shrink-0" />
+                    <span>Contributing to: {selectedChallenge.title}</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-teal-800 bg-teal-100/80 px-2 py-0.5 rounded-full shrink-0">
+                    {selectedChallenge.ward}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* STEP 1: PHOTOGRAPH CAPTURE & UPLOAD WITH DRAG-AND-DROP */}
@@ -528,6 +554,18 @@ export const ReportComplaintModal: React.FC<ReportComplaintModalProps> = ({
                       Retake
                     </button>
                   </div>
+
+                  {/* Bottom Bar: Image Optimization & Privacy Metrics */}
+                  {imageMeta && (
+                    <div className="absolute bottom-2.5 inset-x-2.5 flex items-center justify-between z-20 pointer-events-none">
+                      <span className="bg-charcoal/85 backdrop-blur-xs text-softwhite/90 text-[9px] font-mono px-2 py-0.5 rounded shadow-xs">
+                        {(imageMeta.compressedBytes / 1024).toFixed(0)} KB • {imageMeta.width}×{imageMeta.height}
+                      </span>
+                      <span className="bg-emerald-950/85 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold px-2 py-0.5 rounded shadow-xs">
+                        Camera Verified & Sanitized
+                      </span>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </div>
