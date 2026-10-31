@@ -15,6 +15,7 @@ import {
 import { useCivicData } from '../../context/CivicDataContext';
 import { StippleType } from '../ui/stipple-type';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
+import { CityBackdrop } from '../visual/CityBackdrop';
 
 interface HeroSectionProps {
   onOpenReportModal: () => void;
@@ -60,7 +61,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       : null;
 
   return (
-    <section className="relative pt-10 sm:pt-16 pb-10 px-4 sm:px-8 max-w-7xl mx-auto w-full">
+    <section className="relative pt-10 sm:pt-16 pb-10 px-4 sm:px-8 max-w-7xl mx-auto w-full overflow-hidden">
+      {/* Subtle City Skyline Architectural Backdrop inspired by official CivicTrace logo */}
+      <CityBackdrop variant="skyline" opacity={0.07} />
+
       <motion.div
         initial="hidden"
         animate="visible"
@@ -79,9 +83,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             hidden: { opacity: 0, y: -8 },
             visible: { opacity: 1, y: 0 },
           }}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-sage/75 rounded-full border border-sage text-xs font-semibold text-forest shadow-subtle"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-spruce-light rounded-full border border-sage text-xs font-semibold text-navy shadow-xs"
         >
-          <span className="w-2 h-2 rounded-full bg-burnt animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-terracotta animate-pulse" />
           <span>Every Issue Tracked. Every Resolution Verified.</span>
         </motion.div>
 
@@ -95,9 +99,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         >
           <StippleType
             text="From Civic Complaints to Verified Resolutions."
-            textColor="#0F3A36"
-            accentColor="#E05B2D"
-            stippleColor="#1D534D"
+            textColor="#103533"
+            accentColor="#D86230"
+            stippleColor="#164240"
             fontSize={42}
           />
         </motion.div>

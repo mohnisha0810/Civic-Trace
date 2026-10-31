@@ -3,21 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --color-forest: #0F3A36;
-  --color-forest-hover: #1D534D;
-  --color-burnt: #E05B2D;
-  --color-ivory: #F9F6EE;
-  --color-softwhite: #FFFDF8;
+  --color-forest: #103533;
+  --color-forest-hover: #164240;
+  --color-terracotta: #D86230;
+  --color-burnt: #D86230;
+  --color-ivory: #FAF7EF;
+  --color-softwhite: #FFFFFF;
   --color-sage: #E2EDE7;
-  --color-charcoal: #1C2B29;
-  --color-muted: #67756F;
+  --color-charcoal: #103533;
+  --color-muted: #526865;
 }
 
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #FDFBF7;
-  color: #0B192C;
+  background: #FAF7EF;
+  color: #103533;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -30,7 +31,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #F9F6EE;
+  background: #FAF7EF;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -39,7 +40,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #0F3A36;
+  background: #103533;
 }
 
 /* Leaflet map styles fix */

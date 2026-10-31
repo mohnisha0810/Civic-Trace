@@ -276,6 +276,8 @@ export interface CommunityProgressMetric {
   isDataSufficient: boolean;
 }
 
+export type ChallengeApprovalStatus = 'approved' | 'pending_review' | 'rejected';
+
 export interface CommunityChallenge {
   id: string;
   title: string;
@@ -286,6 +288,13 @@ export interface CommunityChallenge {
   district: string;
   state: string;
   status: ChallengeStatus;
+  approvalStatus?: ChallengeApprovalStatus;
+  creatorUserId?: string;
+  targetOutcome?: string;
+  proposedActivities?: string;
+  coordinatorContact?: string;
+  source?: string;
+  sourceUrl?: string;
   startDate: string;
   endDate: string;
   isDemoData: boolean;

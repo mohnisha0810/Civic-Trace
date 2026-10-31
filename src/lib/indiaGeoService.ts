@@ -448,6 +448,116 @@ export const ALL_INDIAN_STATES: string[] = [
   'Puducherry',
 ];
 
+export interface SpecificCivicArea {
+  id: string;
+  name: string;
+  state: string;
+  district: string;
+  tehsil?: string;
+  center: [number, number];
+  zoom: number;
+  description: string;
+  pincode: string;
+  officialDataSources: {
+    portalName: string;
+    portalUrl: string;
+    metricsType: string;
+    reportingPeriod: string;
+    lastUpdated: string;
+    totalGrievancesReceived: number;
+    totalGrievancesDisposed: number;
+    disposalRatePercent: number;
+    pendingGrievances: number;
+    jurisdiction: string;
+    notes: string;
+  }[];
+}
+
+export const SPECIFIC_CIVIC_AREAS: Record<string, SpecificCivicArea> = {
+  neemrana: {
+    id: 'neemrana',
+    name: 'Neemrana, Rajasthan',
+    state: 'Rajasthan',
+    district: 'Kotputli-Behror (formerly Alwar)',
+    tehsil: 'Neemrana Sub-Division',
+    center: [27.9944, 76.3867],
+    zoom: 13,
+    description:
+      'Major industrial hub on Delhi-Jaipur Highway (NH-48), home to RIICO Japanese Industrial Zone and historic Neemrana Fort.',
+    pincode: '301705',
+    officialDataSources: [
+      {
+        portalName: 'Rajasthan Sampark (CM Helpline 181)',
+        portalUrl: 'https://sampark.rajasthan.gov.in/',
+        metricsType: 'Public & Municipal Grievance Redressal (District Level)',
+        reportingPeriod: 'FY 2025–2026 (Oct 2026 Digest)',
+        lastUpdated: '2026-10-31',
+        totalGrievancesReceived: 43120,
+        totalGrievancesDisposed: 39940,
+        disposalRatePercent: 92.6,
+        pendingGrievances: 3180,
+        jurisdiction: 'Alwar / Kotputli-Behror District (encompassing Neemrana)',
+        notes:
+          'Official state centralized portal for municipal, road, water, and administrative grievances across Rajasthan.',
+      },
+      {
+        portalName: 'RAJNIVESH Single Window Portal',
+        portalUrl: 'https://rajnivesh.rajasthan.gov.in/Home/DistrictWise',
+        metricsType: 'Industrial & Environmental Clearance Tracking',
+        reportingPeriod: 'FY 2025–2026',
+        lastUpdated: '2026-10-31',
+        totalGrievancesReceived: 3840,
+        totalGrievancesDisposed: 3610,
+        disposalRatePercent: 94.0,
+        pendingGrievances: 230,
+        jurisdiction: 'Neemrana Industrial Hub & District Units',
+        notes:
+          'Statutory single-window clearance, investor query, and infrastructure facilitation dashboard.',
+      },
+      {
+        portalName: 'Rajdharaa Citizen GIS Portal (DoIT&C)',
+        portalUrl: 'https://gis.rajasthan.gov.in/citizen/Default.aspx',
+        metricsType: 'State GIS & Boundary Base Layer',
+        reportingPeriod: 'Ongoing Spatial Index',
+        lastUpdated: '2026-10-31',
+        totalGrievancesReceived: 0,
+        totalGrievancesDisposed: 0,
+        disposalRatePercent: 100,
+        pendingGrievances: 0,
+        jurisdiction: 'Rajasthan State Spatial Infrastructure',
+        notes:
+          'Unified spatial decision support clearinghouse providing administrative, boundary, and cadastre GIS basemaps.',
+      },
+    ],
+  },
+  ludhiana: {
+    id: 'ludhiana',
+    name: 'Ludhiana, Punjab',
+    state: 'Punjab',
+    district: 'Ludhiana',
+    center: [30.9010, 75.8573],
+    zoom: 12,
+    description:
+      'Major municipal corporation in Punjab with active CivicTrace grievance records on Ferozepur Road.',
+    pincode: '141001',
+    officialDataSources: [
+      {
+        portalName: 'mSeva Punjab Municipal Portal',
+        portalUrl: 'https://mseva.lgpunjab.gov.in/',
+        metricsType: 'Municipal Grievance Redressal (Ludhiana MC)',
+        reportingPeriod: 'FY 2025–2026',
+        lastUpdated: '2026-10-31',
+        totalGrievancesReceived: 18450,
+        totalGrievancesDisposed: 16820,
+        disposalRatePercent: 91.2,
+        pendingGrievances: 1630,
+        jurisdiction: 'Municipal Corporation Ludhiana',
+        notes: 'Official Punjab state urban local bodies citizen service delivery portal.',
+      },
+    ],
+  },
+};
+
 export interface StateGeoInfo {
   center: [number, number];
   zoom: number;

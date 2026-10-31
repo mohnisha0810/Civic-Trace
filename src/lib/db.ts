@@ -373,7 +373,10 @@ export function getAllChallenges(): CommunityChallenge[] {
       saveAllChallenges(seeds);
       return seeds;
     }
-    return parsed;
+    return parsed.map((c: CommunityChallenge) => ({
+      ...c,
+      approvalStatus: c.approvalStatus || (c.isOfficial ? 'approved' : 'pending_review'),
+    }));
   } catch {
     return getInitialSeedChallenges();
   }

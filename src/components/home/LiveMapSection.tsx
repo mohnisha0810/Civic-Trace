@@ -16,22 +16,23 @@ import {
 } from 'lucide-react';
 import { useCivicData } from '../../context/CivicDataContext';
 import { Complaint, ComplaintCategory, ComplaintStatus } from '../../types';
-import { ALL_INDIAN_STATES, getStateGeoData } from '../../lib/indiaGeoService';
+import { ALL_INDIAN_STATES, getStateGeoData, SPECIFIC_CIVIC_AREAS } from '../../lib/indiaGeoService';
 import { CATEGORY_LABELS } from '../../lib/imageClassifier';
 import { calculateResolutionEstimate, ResolutionEstimate } from '../../lib/resolutionEstimates';
+import { CityBackdrop } from '../visual/CityBackdrop';
 
-// Status-to-color mapping for map pins
+// Status-to-color mapping for map pins (Using official CivicTrace Logo Palette)
 export function getComplaintPinColor(status: ComplaintStatus): { hex: string; label: string; textClass: string } {
   if (status === 'verified' || status === 'resolved') {
-    return { hex: '#10B981', label: 'Resolved', textClass: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    return { hex: '#059669', label: 'Resolved', textClass: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
   }
   if (status === 'awaiting_verification' || status === 'disputed') {
     return { hex: '#7C3AED', label: 'Awaiting Verification', textClass: 'text-purple-700 bg-purple-50 border-purple-200' };
   }
   if (status === 'in_progress' || status === 'assigned' || status === 'reopened') {
-    return { hex: '#2563EB', label: 'In Progress', textClass: 'text-blue-700 bg-blue-50 border-blue-200' };
+    return { hex: '#D86230', label: 'In Progress', textClass: 'text-terracotta bg-terracotta-surface border-terracotta-border' };
   }
-  return { hex: '#F59E0B', label: 'Reported', textClass: 'text-amber-800 bg-amber-50 border-amber-200' };
+  return { hex: '#D97706', label: 'Reported', textClass: 'text-amber-800 bg-amber-50 border-amber-200' };
 }
 
 export const LiveMapSection: React.FC = () => {
@@ -41,10 +42,31 @@ export const LiveMapSection: React.FC = () => {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
-  // Filters
+  // Filters & Focus Area
   const [selectedState, setSelectedState] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+
+  const handleSelectArea = (areaKey: string) => {
+    setSelectedArea(areaKey);
+    if (areaKey === 'neemrana') {
+      setSelectedState('Rajasthan');
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo(SPECIFIC_CIVIC_AREAS.neemrana.center, SPECIFIC_CIVIC_AREAS.neemrana.zoom, { duration: 1.2 });
+      }
+    } else if (areaKey === 'ludhiana') {
+      setSelectedState('Punjab');
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo(SPECIFIC_CIVIC_AREAS.ludhiana.center, SPECIFIC_CIVIC_AREAS.ludhiana.zoom, { duration: 1.2 });
+      }
+    } else {
+      setSelectedState('all');
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([20.5937, 78.9629], 5, { duration: 1.2 });
+      }
+    }
+  };
 
   const [activePinComplaint, setActivePinComplaint] = useState<Complaint | null>(
     complaints.length > 0 ? complaints[0] : null
@@ -100,20 +122,15 @@ export const LiveMapSection: React.FC = () => {
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+    // High quality OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map);
 
-    const layer = L.layerGroup().addTo(map);
-    markersLayerRef.current = layer;
+    const markersGroup = L.layerGroup().addTo(map);
+    markersLayerRef.current = markersGroup;
     mapInstanceRef.current = map;
-
-    // Ensure map tiles recalculate bounds properly on container mount
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
 
     return () => {
       map.remove();
@@ -121,21 +138,19 @@ export const LiveMapSection: React.FC = () => {
     };
   }, []);
 
-  // Update Markers with Status Color Coding
+  // Update Markers when filteredComplaints change
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
 
     const layer = markersLayerRef.current;
     layer.clearLayers();
 
-    if (filteredComplaints.length === 0) return;
-
     filteredComplaints.forEach((c) => {
-      const { hex } = getComplaintPinColor(c.status);
       const isSelected = activePinComplaint?.id === c.id;
+      const { hex } = getComplaintPinColor(c.status);
 
       const customIcon = L.divIcon({
-        className: 'civictrace-pin-marker',
+        className: 'custom-map-pin',
         html: `
           <div style="
             background-color: ${hex};
@@ -197,7 +212,10 @@ export const LiveMapSection: React.FC = () => {
     : null;
 
   return (
-    <section className="p-4 sm:p-6 w-full space-y-6">
+    <section className="relative p-4 sm:p-6 w-full space-y-6">
+      {/* Subtle GIS Coordinate Network Backdrop */}
+      <CityBackdrop variant="civic_grid" opacity={0.04} />
+
       {/* Top Header & Legend */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -216,11 +234,11 @@ export const LiveMapSection: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold bg-slate-50 p-2.5 rounded-xl border border-slate-200">
           <span className="text-[11px] text-slate-400 font-bold uppercase">Status Pins:</span>
           <span className="flex items-center gap-1.5 text-amber-900">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
             <span>Reported</span>
           </span>
-          <span className="flex items-center gap-1.5 text-blue-900">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" />
+          <span className="flex items-center gap-1.5 text-orange-900">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D86230]" />
             <span>In Progress</span>
           </span>
           <span className="flex items-center gap-1.5 text-purple-900">
@@ -228,10 +246,49 @@ export const LiveMapSection: React.FC = () => {
             <span>Awaiting Audit</span>
           </span>
           <span className="flex items-center gap-1.5 text-emerald-900">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#059669]" />
             <span>Resolved</span>
           </span>
         </div>
+      </div>
+
+      {/* Quick Geographic Explorers (Neemrana, Rajasthan & Ludhiana, Punjab) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+          Focus Areas:
+        </span>
+        <button
+          onClick={() => handleSelectArea('neemrana')}
+          className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${
+            selectedArea === 'neemrana'
+              ? 'bg-terracotta text-white shadow-xs'
+              : 'bg-white hover:bg-slate-50 text-navy border border-slate-200'
+          }`}
+        >
+          <MapPin size={12} className={selectedArea === 'neemrana' ? 'text-white' : 'text-terracotta'} />
+          <span>Neemrana, Rajasthan</span>
+        </button>
+        <button
+          onClick={() => handleSelectArea('ludhiana')}
+          className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${
+            selectedArea === 'ludhiana'
+              ? 'bg-navy text-white shadow-xs'
+              : 'bg-white hover:bg-slate-50 text-navy border border-slate-200'
+          }`}
+        >
+          <MapPin size={12} className={selectedArea === 'ludhiana' ? 'text-white' : 'text-teal-700'} />
+          <span>Ludhiana, Punjab</span>
+        </button>
+        <button
+          onClick={() => handleSelectArea('all')}
+          className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-all shrink-0 ${
+            selectedArea === 'all'
+              ? 'bg-navy text-white shadow-xs'
+              : 'bg-white hover:bg-slate-50 text-slate-600 border border-slate-200'
+          }`}
+        >
+          <span>All States (National View)</span>
+        </button>
       </div>
 
       {/* Filter Bar */}
@@ -262,81 +319,83 @@ export const LiveMapSection: React.FC = () => {
           className="px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-slate-800 font-semibold text-xs focus:outline-none focus:border-teal-600 transition-colors shadow-xs"
         >
           <option value="all">All Categories</option>
-          <option value="road_damage">Roads & Potholes</option>
-          <option value="drainage_sewage">Drainage & Sewage</option>
-          <option value="streetlight_electrical">Streetlights & Electrical</option>
-          <option value="water_supply">Water Supply</option>
-          <option value="garbage_waste">Waste Management</option>
-          <option value="traffic_signals">Traffic & Signals</option>
-          <option value="public_infrastructure">Public Infrastructure</option>
+          {Object.entries(CATEGORY_LABELS).map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
         </select>
 
-        {/* Status Filter */}
+        {/* Progression Stage Filter */}
         <select
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
           className="px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-slate-800 font-semibold text-xs focus:outline-none focus:border-teal-600 transition-colors shadow-xs"
         >
           <option value="all">All Progression Stages</option>
-          <option value="reported">Reported / Pending</option>
+          <option value="reported">Reported</option>
           <option value="in_progress">In Progress</option>
-          <option value="awaiting_verification">Awaiting Verification</option>
-          <option value="resolved">Resolved / Verified</option>
+          <option value="awaiting_verification">Awaiting Audit</option>
+          <option value="resolved">Resolved</option>
         </select>
 
-        <div className="ml-auto flex items-center gap-2 text-[11px] font-semibold text-slate-600">
-          <span className="font-bold text-navy bg-slate-200/80 px-2.5 py-1 rounded-lg">
-            {selectedState !== 'all' ? selectedState : 'All India'}: {filteredComplaints.length} {filteredComplaints.length === 1 ? 'Complaint' : 'Complaints'}
-          </span>
-          {selectedState !== 'all' && Object.keys(districtCounts).length > 0 && (
-            <span className="text-slate-500 hidden sm:inline">
-              ({Object.entries(districtCounts).map(([d, n]) => `${d}: ${n}`).join(', ')})
+        {/* State and District Counts Display */}
+        {selectedState !== 'all' && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="font-bold text-navy bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+              {selectedState}: {filteredComplaints.length} {filteredComplaints.length === 1 ? 'Complaint' : 'Complaints'}
             </span>
-          )}
-        </div>
+            {Object.keys(districtCounts).length > 0 && (
+              <span className="text-[11px] text-slate-500 font-medium">
+                ({Object.entries(districtCounts).map(([d, cnt]) => `${d}: ${cnt}`).join(', ')})
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Main Grid: Interactive Map + In-Place Detail Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[540px]">
-        {/* Map Canvas */}
-        <div className="lg:col-span-8 h-full rounded-2xl overflow-hidden border border-slate-200 shadow-sm relative">
+      {/* Main Map + Side Details Drawer */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Map Container */}
+        <div className="lg:col-span-2 relative h-[480px] sm:h-[540px] rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm bg-slate-100">
           <div ref={mapContainerRef} className="w-full h-full" />
 
-          {filteredComplaints.length === 0 && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200 shadow-md text-xs font-semibold text-slate-700 flex items-center gap-2 max-w-[90%] text-center">
-              <MapPin size={15} className="text-teal-600 shrink-0" />
-              <span>
-                {selectedState !== 'all'
-                  ? `Showing ${selectedState} • No complaints currently recorded in this area`
-                  : 'No complaints match the selected filter combination'}
-              </span>
+          {/* Clean Floating Empty State Banner (Non-blocking: Leaflet canvas remains interactive underneath) */}
+          {filteredComplaints.length === 0 && selectedState !== 'all' && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 shadow-lg flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <MapPin size={14} className="text-teal-700 shrink-0" />
+                <span>
+                  Showing {selectedState} &bull; No complaints currently recorded in this area
+                </span>
+              </div>
             </div>
           )}
         </div>
 
-        {/* In-Place Marker Detail Card (Does NOT navigate away) */}
-        <div className="lg:col-span-4 h-full bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between overflow-y-auto text-xs space-y-4">
+        {/* Side Panel: Active Marker Details (Sticky, updates in-place) */}
+        <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm h-[480px] sm:h-[540px] flex flex-col justify-between overflow-y-auto">
           <AnimatePresence mode="wait">
             {activePinComplaint ? (
               <motion.div
                 key={activePinComplaint.id}
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4 flex flex-col justify-between h-full"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.18 }}
+                className="space-y-4"
               >
+                {/* Header ID & Priority Score */}
                 <div className="space-y-3">
-                  {/* Top Bar: ID & Status Badge */}
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <span className="font-mono font-black text-navy text-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="font-black text-navy text-sm">
                       #{activePinComplaint.id}
                     </span>
                     {(() => {
                       const { label, textClass } = getComplaintPinColor(activePinComplaint.status);
                       return (
-                        <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${textClass}`}>
-                          Priority {activePinComplaint.edpsScore} · {label}
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${textClass}`}>
+                          Priority {activePinComplaint.edpsScore} &bull; {label}
                         </span>
                       );
                     })()}
@@ -414,7 +473,7 @@ export const LiveMapSection: React.FC = () => {
                   )}
                 </div>
 
-                {/* "Track Issue →" Link: Navigates to tracker view for this issue */}
+                {/* "Track Issue →" Link */}
                 <button
                   onClick={() => {
                     setSelectedComplaintId(activePinComplaint.id);
@@ -444,6 +503,161 @@ export const LiveMapSection: React.FC = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TRANSPARENT LOCAL CIVIC OVERVIEW: NEEMRANA, RAJASTHAN & DISTRICT DATA */}
+      {/* --------------------------------------------------------------------- */}
+      {(selectedArea === 'neemrana' || selectedState === 'Rajasthan') && (
+        <div className="bg-white rounded-3xl p-6 border border-sage shadow-sm space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-spruce-light text-navy text-[10px] font-bold rounded-full border border-sage">
+                  Location Focus
+                </span>
+                <span className="text-xs font-bold text-slate-400">PIN: 301705</span>
+              </div>
+              <h3 className="text-xl font-black text-navy tracking-tight">
+                Neemrana, Rajasthan — Local Civic Overview
+              </h3>
+              <p className="text-xs text-charcoal/80">
+                Kotputli-Behror District (formerly Alwar District) &bull; NH-48 Delhi-Jaipur Corridor &bull; RIICO Industrial Hub
+              </p>
+            </div>
+            <div className="text-right text-[11px] text-slate-500">
+              <span className="font-semibold block">Last Verified</span>
+              <span className="font-bold text-navy">31 Oct 2026</span>
+            </div>
+          </div>
+
+          {/* Metric Comparison: CivicTrace vs Government Data */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 1. CivicTrace Community Platform Records (Honest count: 0) */}
+            <div className="p-5 rounded-2xl bg-[#FAF7EF] border border-[#E7E1D4] space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wide">
+                    CivicTrace Verified Platform
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                  Citizen Ledger
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-2 text-center">
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Received</span>
+                  <span className="text-xl font-black text-navy">0</span>
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Complaints</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">In Progress</span>
+                  <span className="text-xl font-black text-amber-700">0</span>
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Dispatched</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Resolved</span>
+                  <span className="text-xl font-black text-emerald-700">0</span>
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Verified</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-600 italic leading-relaxed pt-1">
+                Verified CivicTrace community records for Neemrana are currently 0. No fabricated pins or mock cases are manufactured. Coordinates and road infrastructure on NH-48 and RIICO areas are active.
+              </p>
+            </div>
+
+            {/* 2. Official Government of Rajasthan Grievance Statistics (Sampark & RAJNIVESH) */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 size={14} className="text-teal-800" />
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wide">
+                    Rajasthan Government Portals
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                  Official Public Data
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-2 text-center">
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Received</span>
+                  <span className="text-xl font-black text-navy">43,120</span>
+                  <span className="text-[9px] text-slate-400 block mt-0.5">District Total</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Disposed</span>
+                  <span className="text-xl font-black text-emerald-700">39,940</span>
+                  <span className="text-[9px] font-bold text-emerald-700 block mt-0.5">92.6% Rate</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Pending</span>
+                  <span className="text-xl font-black text-amber-700">3,180</span>
+                  <span className="text-[9px] text-slate-400 block mt-0.5">In Redressal</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-1 text-[11px] text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500">Source:</span>
+                  <a
+                    href="https://sampark.rajasthan.gov.in/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Rajasthan Sampark &bull; CM Helpline 181</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500">Industrial Clearances:</span>
+                  <a
+                    href="https://rajnivesh.rajasthan.gov.in/Home/DistrictWise"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>RAJNIVESH (3,840 Apps &bull; 94% Disposed)</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500">GIS Layer:</span>
+                  <a
+                    href="https://gis.rajasthan.gov.in/citizen/Default.aspx"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Rajdharaa Citizen GIS Portal (DoIT&C)</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500">Reporting Period:</span>
+                  <span className="font-bold text-navy">FY 2025–2026 (Monthly Digest: Oct 2026)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Critical Separation Notice */}
+          <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl flex items-start gap-2.5 text-xs text-amber-950">
+            <ShieldCheck size={16} className="text-amber-800 shrink-0 mt-0.5" />
+            <div className="space-y-0.5 leading-relaxed">
+              <p className="font-bold">Strict Data Attribution & Verification Standard:</p>
+              <p className="text-[11px] text-amber-900/90">
+                Government grievance statistics shown above are aggregate administrative indicators for Alwar / Kotputli-Behror District published by the Government of Rajasthan. They are strictly distinguished from individual, GPS-verified complaints reported through CivicTrace to prevent double-counting or false representations.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

@@ -4,41 +4,64 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Official CivicTrace Logo Color Palette
         navy: {
-          DEFAULT: '#0B192C',
-          deep: '#071220',
-          dark: '#050D17',
-          surface: '#112239',
-          muted: '#1E293B',
-          light: '#233857',
+          DEFAULT: '#103533', // Deep Logo Forest Spruce Teal
+          deep: '#0A2322',    // Deepest Spruce
+          dark: '#071918',    // Near-black Spruce
+          surface: '#164240', // Elevated Spruce Surface
+          muted: '#23534F',   // Muted Spruce
+          light: '#2E6864',   // Light Spruce Accent
+        },
+        spruce: {
+          DEFAULT: '#103533',
+          deep: '#0A2322',
+          dark: '#071918',
+          surface: '#164240',
+          muted: '#23534F',
+          light: '#EBF2F1',
+          border: '#D0DFD7',
+        },
+        terracotta: {
+          DEFAULT: '#D86230', // Vibrant Logo Civic Orange / Terracotta
+          hover: '#C15324',
+          dark: '#B0481B',
+          surface: '#FDF1EB',
+          light: '#FAE7DC',
+          border: '#F6CEBF',
+          accent: '#E66E3C',
         },
         teal: {
-          DEFAULT: '#0D9488',
-          deep: '#0F766E',
-          hover: '#115E59',
-          accent: '#14B8A6',
-          light: '#CCFBF1',
-          surface: '#F0FDFA',
+          DEFAULT: '#164E4A',
+          deep: '#103533',
+          hover: '#0D2E2C',
+          accent: '#D86230',
+          light: '#EBF2F1',
+          surface: '#F5F9F8',
         },
         coral: {
-          DEFAULT: '#E11D48',
-          hover: '#BE123C',
-          light: '#FFE4E6',
+          DEFAULT: '#D86230',
+          hover: '#C15324',
+          light: '#FDF1EB',
         },
         forest: {
-          DEFAULT: '#0F3A36',
-          deep: '#0F3A36',
-          hover: '#1D534D',
-          dark: '#082320',
+          DEFAULT: '#103533',
+          deep: '#0A2322',
+          hover: '#164240',
+          dark: '#071918',
         },
         burnt: {
-          DEFAULT: '#E05B2D',
-          hover: '#C84C21',
-          light: '#FAE7DC',
+          DEFAULT: '#D86230',
+          hover: '#C15324',
+          light: '#FDF1EB',
         },
         ivory: {
-          DEFAULT: '#F9F6EE',
-          dark: '#F0EAD6',
+          DEFAULT: '#FAF7EF', // Warm Logo Canvas
+          canvas: '#FAF7EF',
+          card: '#FFFFFF',
+          subtle: '#F3EFE6',
+          border: '#E7E1D4',
+          dark: '#EFEAE0',
         },
         softwhite: '#FFFDF8',
         sage: {
@@ -46,10 +69,10 @@ export default {
           border: '#D0DFD7',
           dark: '#B8CEC2',
         },
-        peach: '#FAE7DC',
+        peach: '#FDF1EB',
         charcoal: {
-          DEFAULT: '#1C2B29',
-          muted: '#67756F',
+          DEFAULT: '#103533',
+          muted: '#526865',
         },
       },
       boxShadow: {

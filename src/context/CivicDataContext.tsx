@@ -119,7 +119,14 @@ interface CivicDataContextType {
       targetResidentParticipation: number;
     };
     participationRules?: string[];
+    targetOutcome?: string;
+    proposedActivities?: string;
+    coordinatorContact?: string;
+    source?: string;
+    sourceUrl?: string;
   }) => CommunityChallenge;
+  approveChallenge: (challengeId: string) => boolean;
+  rejectChallenge: (challengeId: string, reason?: string) => boolean;
   postChallengeOfficialUpdate: (
     challengeId: string,
     update: { details: string; type?: ChallengeActivityUpdate['type'] }
@@ -1062,6 +1069,11 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       targetResidentParticipation: number;
     };
     participationRules?: string[];
+    targetOutcome?: string;
+    proposedActivities?: string;
+    coordinatorContact?: string;
+    source?: string;
+    sourceUrl?: string;
   }): CommunityChallenge => {
     const isOfficial =
       data.isOfficial !== undefined
@@ -1094,6 +1106,13 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       district: data.district || 'Local Administration',
       state: data.state || 'India',
       status: isOfficial ? 'active' : 'under_review',
+      approvalStatus: isOfficial ? 'approved' : 'pending_review',
+      creatorUserId: currentUser?.id,
+      targetOutcome: data.targetOutcome,
+      proposedActivities: data.proposedActivities,
+      coordinatorContact: data.coordinatorContact,
+      source: data.source || (isOfficial ? 'CivicTrace Municipal' : 'Citizen Community Initiative'),
+      sourceUrl: data.sourceUrl,
       startDate: data.startDate,
       endDate: data.endDate,
       isDemoData: data.isDemoData || false,
@@ -1160,6 +1179,63 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     saveAllChallenges(all);
     refreshChallenges();
     return newChallenge;
+  };
+
+  const approveChallenge = (challengeId: string): boolean => {
+    const isAuthorized =
+      currentUser?.role === 'government' ||
+      currentUser?.role === 'official' ||
+      currentUser?.role === 'super_admin';
+    if (!isAuthorized) return false;
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      const nowIso = new Date().toISOString();
+      const approvalUpdate: ChallengeActivityUpdate = {
+        id: `upd_appr_${Date.now()}`,
+        timestamp: nowIso,
+        type: 'official_update',
+        actorName: currentUser?.name || 'Municipal Directorate',
+        actorRole: currentUser?.role === 'super_admin' ? 'Super Admin Directorate' : 'Municipal Official',
+        details: `Campaign proposal officially reviewed, validated, and approved for neighbourhood collective action.`,
+      };
+      return {
+        ...prev,
+        status: 'active',
+        approvalStatus: 'approved',
+        isOfficial: true,
+        updates: [approvalUpdate, ...prev.updates],
+        updatedAt: nowIso,
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
+  };
+
+  const rejectChallenge = (challengeId: string, reason?: string): boolean => {
+    const isAuthorized =
+      currentUser?.role === 'government' ||
+      currentUser?.role === 'official' ||
+      currentUser?.role === 'super_admin';
+    if (!isAuthorized) return false;
+
+    const updated = updateChallengeRecord(challengeId, (prev) => {
+      return {
+        ...prev,
+        approvalStatus: 'rejected',
+        status: 'completed',
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    if (updated) {
+      refreshChallenges();
+      return true;
+    }
+    return false;
   };
 
   const postChallengeOfficialUpdate = (
@@ -1269,6 +1345,8 @@ export const CivicDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         completeVolunteerActivity,
         linkComplaintToChallenge,
         createNewChallenge,
+        approveChallenge,
+        rejectChallenge,
         postChallengeOfficialUpdate,
         verifyChallengeImprovement,
       }}

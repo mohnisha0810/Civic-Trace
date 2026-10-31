@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { CivicTraceLogo } from '../layout/CivicTraceLogo';
+import { CityBackdrop } from '../visual/CityBackdrop';
 import { useAuth } from '../../context/AuthContext';
 import { OrganizationType } from '../../types';
 import { ALL_INDIAN_STATES } from '../../lib/indiaGeoService';
